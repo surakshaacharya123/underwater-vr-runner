@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aqua Realms: The Starfish & The Explorer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: Arial; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; z-index: 100; }
+        #modeSwitch { position: absolute; top: 10px; right: 10px; z-index: 100; }
+        .btn { padding: 12px 20px; background: #ff6b35; color: white; border: none; border-radius: 10px; cursor: pointer; margin: 5px; }
+        .btn.active { background: #00f5ff; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 100; }
+        #explorerUI { position: absolute; bottom: 80px; left: 10px; color: white; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; z-index: 100; display: none; }
+        #puzzlePanel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,30,60,0.95); color: white; padding: 30px; border-radius: 20px; display: none; z-index: 200; }
+        .rune { display: inline-block; width: 50px; height: 50px; margin: 5px; background: #003366; border: 2px solid #0077be; border-radius: 10px; cursor: pointer; text-align: center; line-height: 46px; font-size: 24px; }
+        .rune.active { background: #00f5ff; color: #000; }
+        .rune.correct { background: #00ff00; }
+        .rune.wrong { background: #ff0000; }
+        #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); color: white; padding: 40px; border-radius: 20px; text-align: center; display: none; z-index: 200; }
+        #vrButton { position: absolute; bottom: 20px; right: 20px; padding: 15px 25px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 16px; z-index: 100; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3 id="gameTitle">🐠 Starfish Runner</h3>
+        <div>💰 Coins: <span id="coins">0</span></div>
+        <div>📏 Distance: <span id="distance">0</span>m</div>
+        <div>⚡ Speed: <span id="speed">15</span> m/s</div>
+        <div id="explorerStats" style="display: none;">
+            <div>🔮 Puzzles: <span id="puzzlesSolved">0</span></div>
+            <div>🗝️ Keys: <span id="keys">0</span></div>
+        </div>
+    </div>
+    
+    <div id="modeSwitch">
+        <button class="btn active" id="starfishBtn">🐠 Starfish</button>
+        <button class="btn" id="explorerBtn">🧜♂️ Explorer</button>
+    </div>
+    
+    <div id="controls">
+        <button class="btn" id="leftBtn">←</button>
+        <button class="btn" id="upBtn">↑</button>
+        <button class="btn" id="downBtn">↓</button>
+        <button class="btn" id="rightBtn">→</button>
+        <button class="btn" id="actionBtn">⚡</button>
+    </div>
+    
+    <div id="explorerUI">
+        <div>🔦 Flashlight: ON</div>
+        <div>🧩 Press ⚡ near glowing objects to interact</div>
+        <div>🚪 Solve puzzles to unlock gates for starfish</div>
+    </div>
+    
+    <button id="vrButton">Enter VR</button>
+    
+    <div id="puzzlePanel">
+        <h3>🔮 Ancient Rune Puzzle</h3>
+        <p>Memorize and repeat the sequence:</p>
+        <div id="runeSequence"></div>
+        <div id="playerRunes"></div>
+        <button class="btn" onclick="resetPuzzle()">Reset</button>
+        <button class="btn" onclick="closePuzzle()">Close</button>
+    </div>
+    
+    <div id="gameOver">
+        <h1>🏆 GAME COMPLETE!</h1>
+        <div id="finalStats"></div>
+        <button class="btn" onclick="location.reload()">Play Again</button>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x001122);
+        scene.fog = new THREE.Fog(0x003366, 15, 60);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // VR Setup
+        document.getElementById('vrButton').onclick = async () => {
+            try {
+                if (renderer.xr.isPresenting) {
+                    renderer.xr.getSession().end();
+                } else {
+                    const session = await navigator.xr.requestSession('immersive-vr');
+                    renderer.xr.setSession(session);
+                }
+            } catch (e) {
+                alert('VR not supported');
+            }
+        };
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x336699, 0.6);
+        scene.add(ambientLight);
+        
+        const sunlight = new THREE.DirectionalLight(0x66AAFF, 1.5);
+        sunlight.position.set(0, 30, 10);
+        sunlight.castShadow = true;
+        scene.add(sunlight);
+        
+        // Ocean floor
+        const oceanFloor = new THREE.Mesh(
+            new THREE.PlaneGeometry(400, 400),
+            new THREE.MeshLambertMaterial({ color: 0x8B7355 })
+        );
+        oceanFloor.rotation.x = -Math.PI / 2;
+        scene.add(oceanFloor);
+        
+        // Coral reefs
+        const corals = [];
+        for (let i = 0; i < 60; i++) {
+            const coralColors = [0xFF6B6B, 0xFF8E53, 0xFF6B9D, 0xC44569, 0xF8B500, 0x6C5CE7];
+            const coral = new THREE.Mesh(
+                new THREE.SphereGeometry(0.3 + Math.random() * 2, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: coralColors[Math.floor(Math.random() * coralColors.length)]
+                })
+            );
+            coral.position.set(
+                (Math.random() - 0.5) * 300,
+                0.5 + Math.random() * 3,
+                (Math.random() - 0.5) * 300
+            );
+            corals.push(coral);
+            scene.add(coral);
+        }
+        
+        // Swimming fish
+        const fish = [];
+        for (let i = 0; i < 80; i++) {
+            const fishColors = [0xFF6347, 0x32CD32, 0x1E90FF, 0xFFD700, 0xFF69B4, 0x00CED1];
+            const fishBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15 + Math.random() * 0.25, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: fishColors[Math.floor(Math.random() * fishColors.length)]
+                })
+            );
+            fishBody.scale.z = 2.5;
+            
+            const tail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.1, 0.25, 6),
+                fishBody.material
+            );
+            tail.position.z = -0.3;
+            tail.rotation.x = Math.PI / 2;
+            fishBody.add(tail);
+            
+            fishBody.position.set(
+                (Math.random() - 0.5) * 200,
+                1 + Math.random() * 12,
+                (Math.random() - 0.5) * 300
+            );
+            
+            fishBody.userData = {
+                speed: 0.8 + Math.random() * 2,
+                direction: Math.random() * Math.PI * 2,
+                swimHeight: fishBody.position.y
+            };
+            
+            fish.push(fishBody);
+            scene.add(fishBody);
+        }
+        
+        // Floating bubbles
+        const bubbles = [];
+        for (let i = 0; i < 150; i++) {
+            const bubble = new THREE.Mesh(
+                new THREE.SphereGeometry(0.03 + Math.random() * 0.15, 8, 6),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x87CEEB, 
+                    transparent: true, 
+                    opacity: 0.4 
+                })
+            );
+            bubble.position.set(
+                (Math.random() - 0.5) * 300,
+                Math.random() * 20,
+                (Math.random() - 0.5) * 300
+            );
+            bubble.userData = {
+                riseSpeed: 0.3 + Math.random() * 1.2,
+                sway: Math.random() * 0.02
+            };
+            bubbles.push(bubble);
+            scene.add(bubble);
+        }
+        
+        // Game modes and characters
+        let gameMode = 'starfish';
+        let starfishLane = 0;
+        let starfishY = 3;
+        let isJumping = false;
+        let distance = 0;
+        let coins = 0;
+        let speed = 18;
+        let gameRunning = true;
+        
+        // Explorer mode variables
+        let puzzlesSolved = 0;
+        let keys = 0;
+        let explorerX = 0;
+        let explorerY = 3;
+        let explorerZ = 0;
+        
+        // Starfish (original runner game)
+        const starfish = new THREE.Group();
+        const starfishBody = new THREE.Mesh(
+            new THREE.SphereGeometry(0.8, 16, 12),
+            new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+        );
+        starfishBody.scale.y = 0.4;
+        starfish.add(starfishBody);
+        
+        const starfishLimbs = [];
+        for (let i = 0; i < 5; i++) {
+            const limb = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.15, 1.5, 8),
+                new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+            );
+            const angle = (i / 5) * Math.PI * 2;
+            limb.position.set(Math.cos(angle) * 0.7, -0.1, Math.sin(angle) * 0.7);
+            limb.rotation.z = Math.PI / 2;
+            limb.rotation.y = -angle;
+            starfishLimbs.push(limb);
+            starfish.add(limb);
+        }
+        
+        starfish.position.set(0, 3, 0);
+        scene.add(starfish);
+        
+        // Explorer character
+        const explorer = new THREE.Group();
+        const explorerBody = new THREE.Mesh(
+            new THREE.CapsuleGeometry(0.5, 2),
+            new THREE.MeshStandardMaterial({ color: 0x4169E1 })
+        );
+        explorer.add(explorerBody);
+        
+        const helmet = new THREE.Mesh(
+            new THREE.SphereGeometry(0.6),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x87CEEB, 
+                transparent: true, 
+                opacity: 0.8 
+            })
+        );
+        helmet.position.y = 1.5;
+        explorer.add(helmet);
+        
+        // Flashlight
+        const flashlight = new THREE.SpotLight(0xffffff, 2, 20, Math.PI / 8, 0.5);
+        flashlight.position.set(0.5, 0.5, 1);
+        flashlight.target.position.set(0, 0, 5);
+        explorer.add(flashlight);
+        explorer.add(flashlight.target);
+        
+        explorer.position.set(0, 3, 0);
+        explorer.visible = false;
+        scene.add(explorer);
+        
+        // Race lanes for starfish mode
+        for (let i = -1; i <= 1; i++) {
+            const lane = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 0.1, 800),
+                new THREE.MeshBasicMaterial({ color: 0x66AAFF, transparent: true, opacity: 0.3 })
+            );
+            lane.position.set(i * 5, 0.2, 0);
+            scene.add(lane);
+        }
+        
+        // Starfish mode objects
+        const starfishObjects = [];
+        
+        function createCoin(x, z) {
+            const coin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.5, 0.2, 8),
+                new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+            );
+            coin.position.set(x, 3, z);
+            coin.userData = { type: 'coin', collected: false };
+            starfishObjects.push(coin);
+            scene.add(coin);
+        }
+        
+        function createObstacle(x, z) {
+            const obstacle = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 5, 2),
+                new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+            );
+            obstacle.position.set(x, 2.5, z);
+            obstacle.userData = { type: 'obstacle', destroyed: false };
+            starfishObjects.push(obstacle);
+            scene.add(obstacle);
+        }
+        
+        // Generate starfish level
+        for (let z = -25; z > -600; z -= 12) {
+            for (let lane = -1; lane <= 1; lane++) {
+                if (Math.random() < 0.5) {
+                    createCoin(lane * 5, z);
+                }
+            }
+            if (Math.random() < 0.2) {
+                const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                createObstacle(obsLane * 5, z);
+            }
+        }
+        
+        // Explorer mode objects
+        const puzzleStones = [];
+        const gates = [];
+        const treasureChests = [];
+        
+        // Create puzzle stones
+        for (let i = 0; i < 5; i++) {
+            const stone = new THREE.Mesh(
+                new THREE.OctahedronGeometry(1.5),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x00ffff, 
+                    transparent: true, 
+                    opacity: 0.8 
+                })
+            );
+            stone.position.set(
+                Math.cos(i * Math.PI * 2 / 5) * 20,
+                2,
+                Math.sin(i * Math.PI * 2 / 5) * 20
+            );
+            stone.userData = { 
+                type: 'puzzle', 
+                solved: false, 
+                id: i,
+                glowing: true
+            };
+            puzzleStones.push(stone);
+            scene.add(stone);
+        }
+        
+        // Create gates
+        for (let i = 0; i < 3; i++) {
+            const gate = new THREE.Mesh(
+                new THREE.BoxGeometry(8, 6, 1),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0x8B0000, 
+                    transparent: true, 
+                    opacity: 0.8 
+                })
+            );
+            gate.position.set(
+                (i - 1) * 15,
+                3,
+                -40 - i * 20
+            );
+            gate.userData = { 
+                type: 'gate', 
+                locked: true, 
+                id: i 
+            };
+            gates.push(gate);
+            scene.add(gate);
+        }
+        
+        // Puzzle system
+        let currentPuzzle = [];
+        let playerSequence = [];
+        let puzzleActive = false;
+        let nearPuzzleStone = null;
+        
+        const runeSymbols = ['⚡', '🔥', '❄️', '🌊', '🌟', '💎', '🔮', '⭐'];
+        
+        function startPuzzle(stoneId) {
+            if (puzzleActive || puzzleStones[stoneId].userData.solved) return;
+            
+            puzzleActive = true;
+            currentPuzzle = [];
+            playerSequence = [];
+            
+            // Generate sequence
+            const sequenceLength = 3 + Math.floor(stoneId / 2);
+            for (let i = 0; i < sequenceLength; i++) {
+                currentPuzzle.push(runeSymbols[Math.floor(Math.random() * runeSymbols.length)]);
+            }
+            
+            // Show puzzle
+            document.getElementById('runeSequence').innerHTML = 
+                '<p>Memorize this sequence:</p>' +
+                currentPuzzle.map(r => `<span class="rune active">${r}</span>`).join('');
+            
+            document.getElementById('playerRunes').innerHTML = 
+                '<p>Click to repeat:</p>' +
+                runeSymbols.map(r => 
+                    `<span class="rune" onclick="selectRune('${r}')">${r}</span>`
+                ).join('');
+            
+            document.getElementById('puzzlePanel').style.display = 'block';
+            
+            // Hide sequence after 3 seconds
+            setTimeout(() => {
+                document.getElementById('runeSequence').innerHTML = 
+                    '<p>Now repeat the sequence:</p>' +
+                    currentPuzzle.map(() => '<span class="rune">?</span>').join('');
+            }, 3000);
+        }
+        
+        function selectRune(rune) {
+            if (!puzzleActive) return;
+            
+            playerSequence.push(rune);
+            
+            // Update display
+            const runeElements = document.getElementById('runeSequence').querySelectorAll('.rune');
+            if (runeElements[playerSequence.length - 1]) {
+                runeElements[playerSequence.length - 1].textContent = rune;
+                
+                if (rune === currentPuzzle[playerSequence.length - 1]) {
+                    runeElements[playerSequence.length - 1].classList.add('correct');
+                } else {
+                    runeElements[playerSequence.length - 1].classList.add('wrong');
+                }
+            }
+            
+            if (playerSequence.length === currentPuzzle.length) {
+                setTimeout(() => {
+                    if (JSON.stringify(playerSequence) === JSON.stringify(currentPuzzle)) {
+                        puzzlesSolved++;
+                        keys++;
+                        puzzleStones[nearPuzzleStone.userData.id].userData.solved = true;
+                        puzzleStones[nearPuzzleStone.userData.id].material.color.setHex(0x00ff00);
+                        
+                        // Unlock corresponding gate
+                        if (gates[nearPuzzleStone.userData.id]) {
+                            gates[nearPuzzleStone.userData.id].userData.locked = false;
+                            gates[nearPuzzleStone.userData.id].material.color.setHex(0x00ff00);
+                            gates[nearPuzzleStone.userData.id].material.opacity = 0.3;
+                        }
+                        
+                        alert('Puzzle solved! Gate unlocked for starfish!');
+                    } else {
+                        alert('Wrong sequence! Try again.');
+                    }
+                    closePuzzle();
+                }, 1000);
+            }
+        }
+        
+        function resetPuzzle() {
+            playerSequence = [];
+            document.getElementById('runeSequence').innerHTML = 
+                currentPuzzle.map(r => `<span class="rune active">${r}</span>`).join('');
+        }
+        
+        function closePuzzle() {
+            puzzleActive = false;
+            document.getElementById('puzzlePanel').style.display = 'none';
+            nearPuzzleStone = null;
+        }
+        
+        // Mode switching
+        document.getElementById('starfishBtn').onclick = () => {
+            gameMode = 'starfish';
+            starfish.visible = true;
+            explorer.visible = false;
+            document.getElementById('starfishBtn').classList.add('active');
+            document.getElementById('explorerBtn').classList.remove('active');
+            document.getElementById('gameTitle').textContent = '🐠 Starfish Runner';
+            document.getElementById('explorerStats').style.display = 'none';
+            document.getElementById('explorerUI').style.display = 'none';
+        };
+        
+        document.getElementById('explorerBtn').onclick = () => {
+            gameMode = 'explorer';
+            starfish.visible = false;
+            explorer.visible = true;
+            document.getElementById('starfishBtn').classList.remove('active');
+            document.getElementById('explorerBtn').classList.add('active');
+            document.getElementById('gameTitle').textContent = '🧜♂️ Explorer Mode';
+            document.getElementById('explorerStats').style.display = 'block';
+            document.getElementById('explorerUI').style.display = 'block';
+        };
+        
+        // Controls
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        // Touch controls
+        document.getElementById('leftBtn').onclick = () => keys['ArrowLeft'] = true;
+        document.getElementById('rightBtn').onclick = () => keys['ArrowRight'] = true;
+        document.getElementById('upBtn').onclick = () => keys['ArrowUp'] = true;
+        document.getElementById('downBtn').onclick = () => keys['ArrowDown'] = true;
+        document.getElementById('actionBtn').onclick = () => {
+            if (gameMode === 'explorer' && nearPuzzleStone) {
+                startPuzzle(nearPuzzleStone.userData.id);
+            } else if (gameMode === 'starfish') {
+                isJumping = true;
+            }
+        };
+        
+        // Animation
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            const deltaTime = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Environment animations
+            bubbles.forEach(bubble => {
+                bubble.position.y += bubble.userData.riseSpeed * deltaTime;
+                bubble.position.x += Math.sin(time + bubble.position.z * 0.01) * bubble.userData.sway;
+                if (bubble.position.y > 25) bubble.position.y = 0;
+            });
+            
+            fish.forEach(fishBody => {
+                fishBody.userData.direction += (Math.random() - 0.5) * 0.015;
+                fishBody.position.x += Math.cos(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.z += Math.sin(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.y = fishBody.userData.swimHeight + Math.sin(time * 3 + fishBody.position.x * 0.1) * 0.5;
+                fishBody.rotation.y = fishBody.userData.direction;
+            });
+            
+            // Puzzle stone glow animation
+            puzzleStones.forEach(stone => {
+                if (!stone.userData.solved) {
+                    stone.rotation.y += deltaTime;
+                    stone.material.opacity = 0.6 + Math.sin(time * 3) * 0.3;
+                }
+            });
+            
+            if (gameMode === 'starfish' && gameRunning) {
+                // Original starfish runner logic
+                starfish.position.z -= speed * deltaTime;
+                distance += speed * deltaTime;
+                
+                const targetX = starfishLane * 5;
+                starfish.position.x += (targetX - starfish.position.x) * 0.12;
+                
+                if (isJumping) {
+                    starfishY += 10 * deltaTime;
+                    if (starfishY > 7) {
+                        starfishY = 7;
+                        isJumping = false;
+                    }
+                } else {
+                    starfishY += (3 - starfishY) * 0.12;
+                }
+                starfish.position.y = starfishY;
+                
+                // Starfish animation
+                starfish.rotation.y = Math.sin(time * 5) * 0.4;
+                starfishLimbs.forEach((limb, i) => {
+                    limb.rotation.x = Math.sin(time * 6 + i) * 0.5;
+                });
+                
+                // Starfish controls
+                if (keys['ArrowLeft'] && starfishLane > -1) starfishLane--;
+                if (keys['ArrowRight'] && starfishLane < 1) starfishLane++;
+                if (keys['ArrowUp'] && !isJumping) isJumping = true;
+                
+                // Coin animation and collision
+                starfishObjects.forEach(obj => {
+                    if (obj.userData.type === 'coin') {
+                        obj.rotation.y += deltaTime * 3;
+                        obj.position.y = 3 + Math.sin(time * 2 + obj.position.x) * 0.3;
+                    }
+                    
+                    const dx = Math.abs(starfish.position.x - obj.position.x);
+                    const dy = Math.abs(starfish.position.y - obj.position.y);
+                    const dz = Math.abs(starfish.position.z - obj.position.z);
+                    
+                    if (dx < 2 && dy < 2 && dz < 3) {
+                        if (obj.userData.type === 'coin' && !obj.userData.collected) {
+                            obj.userData.collected = true;
+                            obj.visible = false;
+                            coins++;
+                            speed += 0.2;
+                        } else if (obj.userData.type === 'obstacle' && !obj.userData.destroyed) {
+                            obj.userData.destroyed = true;
+                            obj.visible = false;
+                            gameRunning = false;
+                            
+                            document.getElementById('finalStats').innerHTML = `
+                                <div>🏃 Distance: <strong>${Math.floor(distance)}m</strong></div>
+                                <div>💰 Coins: <strong>${coins}</strong></div>
+                                <div>🏆 Score: <strong>${coins * 15 + Math.floor(distance / 10)}</strong></div>
+                            `;
+                            document.getElementById('gameOver').style.display = 'block';
+                        }
+                    }
+                });
+                
+                camera.position.z = starfish.position.z + 8;
+                camera.position.x = starfish.position.x * 0.2;
+                camera.lookAt(starfish.position);
+                
+            } else if (gameMode === 'explorer') {
+                // Explorer movement
+                const moveSpeed = 8;
+                
+                if (keys['ArrowLeft'] || keys['KeyA']) {
+                    explorerX -= moveSpeed * deltaTime;
+                    explorer.rotation.y = Math.PI / 2;
+                }
+                if (keys['ArrowRight'] || keys['KeyD']) {
+                    explorerX += moveSpeed * deltaTime;
+                    explorer.rotation.y = -Math.PI / 2;
+                }
+                if (keys['ArrowUp'] || keys['KeyW']) {
+                    explorerZ -= moveSpeed * deltaTime;
+                    explorer.rotation.y = 0;
+                }
+                if (keys['ArrowDown'] || keys['KeyS']) {
+                    explorerZ += moveSpeed * deltaTime;
+                    explorer.rotation.y = Math.PI;
+                }
+                if (keys['Space']) {
+                    explorerY += moveSpeed * deltaTime;
+                }
+                if (keys['ShiftLeft']) {
+                    explorerY -= moveSpeed * deltaTime;
+                }
+                
+                explorer.position.set(explorerX, explorerY, explorerZ);
+                
+                // Check for nearby puzzle stones
+                nearPuzzleStone = null;
+                puzzleStones.forEach(stone => {
+                    const distance = explorer.position.distanceTo(stone.position);
+                    if (distance < 5 && !stone.userData.solved) {
+                        nearPuzzleStone = stone;
+                        stone.material.opacity = 1;
+                    } else if (!stone.userData.solved) {
+                        stone.material.opacity = 0.6 + Math.sin(time * 3) * 0.3;
+                    }
+                });
+                
+                // Update flashlight direction
+                const direction = new THREE.Vector3(0, 0, -1);
+                direction.applyQuaternion(explorer.quaternion);
+                flashlight.target.position.copy(explorer.position).add(direction.multiplyScalar(10));
+                
+                camera.position.set(explorerX + 10, explorerY + 8, explorerZ + 10);
+                camera.lookAt(explorer.position);
+            }
+            
+            // Reset touch controls
+            setTimeout(() => {
+                keys['ArrowLeft'] = false;
+                keys['ArrowRight'] = false;
+                keys['ArrowUp'] = false;
+                keys['ArrowDown'] = false;
+            }, 100);
+            
+            // Update UI
+            document.getElementById('coins').textContent = coins;
+            document.getElementById('distance').textContent = Math.floor(distance);
+            document.getElementById('speed').textContent = speed.toFixed(1);
+            document.getElementById('puzzlesSolved').textContent = puzzlesSolved;
+            document.getElementById('keys').textContent = keys;
+            
+            renderer.render(scene, camera);
+        }
+        
+        renderer.setAnimationLoop(animate);
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Make functions global
+        window.selectRune = selectRune;
+        window.resetPuzzle = resetPuzzle;
+        window.closePuzzle = closePuzzle;
+        
+        console.log('🌊 Aqua Realms: Enhanced Explorer Mode Ready!');
+    </script>
+</body>
+</html>

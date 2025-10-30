@@ -1,0 +1,30 @@
+{
+  "name": "kev-the-annoyer-3d",
+  "version": "1.0.0",
+  "description": "3D Destruction Simulation in Three.js featuring Kev the Annoyer starfish character",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "serve": "npx http-server -p 8000 -c-1"
+  },
+  "keywords": [
+    "threejs",
+    "webxr",
+    "vr",
+    "ar",
+    "3d",
+    "physics",
+    "animation",
+    "destruction"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.158.0",
+    "cannon-es": "^0.20.0",
+    "gsap": "^3.12.2"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

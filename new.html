@@ -1,0 +1,302 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Starfish Smash — Three.js mini</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; }
+    #info {
+      position: absolute; left:10px; top:10px; z-index:2;
+      font-family: sans-serif; color: #eee; background: rgba(0,0,0,0.35);
+      padding:8px; border-radius:6px; font-size:13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">Open this file in a modern browser. Step 1: Scene with starfish, building, smash + debris.</div>
+
+  <!-- Three.js + OrbitControls from unpkg -->
+  <script src="https://unpkg.com/three/build/three.min.js"></script>
+  <script src="https://unpkg.com/three/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+  // --- Basic setup ---
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x20232a);
+
+  const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 100);
+  camera.position.set(0, 3.2, 6);
+
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0.5, 0.9, 0);
+  controls.update();
+
+  // Lights
+  const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x202020, 0.7);
+  scene.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(5, 8, 5);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(1024,1024);
+  dir.shadow.camera.near = 0.5;
+  dir.shadow.camera.far = 20;
+  scene.add(dir);
+
+  // ground
+  const groundMat = new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:1.0});
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = 0;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // --- Create the starfish-like creature (starfishGroup) ---
+  function createStarfish() {
+    const group = new THREE.Group();
+
+    // body
+    const bodyGeo = new THREE.SphereGeometry(0.6, 32, 16);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xff7f27,
+      roughness: 0.6,
+      metalness: 0.05,
+      flatShading: false
+    });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.scale.y = 0.6;
+    body.castShadow = true;
+    group.add(body);
+
+    // five limbs made from cylinders, positioned radially
+    const limbGeo = new THREE.CylinderGeometry(0.18, 0.28, 1.25, 12);
+    for (let i = 0; i < 5; i++) {
+      const limb = new THREE.Mesh(limbGeo, bodyMat.clone());
+      const angle = i * (Math.PI * 2 / 5);
+      const r = 0.95;
+      // cylinder default axis along Y; rotate to lay out horizontally
+      limb.rotation.z = Math.PI / 2;
+      limb.rotation.y = -angle;
+      limb.position.set(Math.cos(angle) * r, -0.12, Math.sin(angle) * r);
+      limb.castShadow = true;
+      // slight taper and bend: scale & small rotation
+      limb.scale.set(1, 1, 1);
+      group.add(limb);
+    }
+
+    // eye
+    const eyeBall = new THREE.Mesh(new THREE.SphereGeometry(0.12,16,8), new THREE.MeshStandardMaterial({
+      color: 0x111111, roughness: 0.15, metalness: 0.6
+    }));
+    eyeBall.position.set(0, 0.12, 0.45);
+    eyeBall.castShadow = true;
+    group.add(eyeBall);
+
+    group.position.set(-3, 1, 0); // start left
+    return group;
+  }
+
+  const starfish = createStarfish();
+  scene.add(starfish);
+
+  // --- Create a simple building (single box), plus precomputed debris pieces ---
+  const buildingGroup = new THREE.Group();
+  const buildingMain = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 1.8),
+    new THREE.MeshStandardMaterial({color: 0x888888, roughness: 0.95}));
+  buildingMain.castShadow = true;
+  buildingMain.receiveShadow = true;
+  buildingMain.position.set(0, 0.8, 0);
+  buildingGroup.add(buildingMain);
+
+  // small roof block
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 2.0),
+    new THREE.MeshStandardMaterial({color: 0x6e6e6e, roughness: 0.95}));
+  roof.position.set(0, 1.2, 0);
+  buildingGroup.add(roof);
+
+  buildingGroup.position.set(1.5, 0, 0); // place building a bit right of center
+  scene.add(buildingGroup);
+
+  // Create invisible debris pieces (will be activated on smash)
+  const debris = [];
+  const debrisMaterial = new THREE.MeshStandardMaterial({ color: 0x9a7f6b, roughness: 0.95 });
+  // generate small bricks inside the building bounding box
+  const bBox = { w: 2.0, h: 1.4, d: 1.6 };
+  for (let i = 0; i < 80; i++) {
+    const sx = 0.08 + Math.random() * 0.18;
+    const sy = 0.05 + Math.random() * 0.15;
+    const sz = 0.06 + Math.random() * 0.14;
+    const geo = new THREE.BoxGeometry(sx, sy, sz);
+    const m = new THREE.Mesh(geo, debrisMaterial.clone());
+    m.castShadow = true;
+    m.visible = false;
+    // store initial local position inside the building
+    m.userData.initPos = new THREE.Vector3(
+      (Math.random() - 0.5) * bBox.w,
+      0.2 + Math.random() * bBox.h,
+      (Math.random() - 0.5) * bBox.d
+    );
+    m.userData.velocity = new THREE.Vector3(0,0,0);
+    debris.push(m);
+    buildingGroup.add(m);
+  }
+
+  // --- Simple smoke particles array ---
+  const smokeParticles = [];
+  function spawnSmoke(x,y,z, count=10) {
+    for (let i=0;i<count;i++){
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.08 + Math.random()*0.12, 8, 8),
+        new THREE.MeshBasicMaterial({ color: 0x555555, transparent:true, opacity:0.55 }));
+      s.position.set(x + (Math.random()-0.5)*0.4, y + Math.random()*0.4, z + (Math.random()-0.5)*0.4);
+      s.userData = { life: 1.0, growth: 0.6 + Math.random()*0.8, rise: 0.6 + Math.random()*0.8 };
+      scene.add(s);
+      smokeParticles.push(s);
+    }
+  }
+
+  // --- animation & smash logic ---
+  let smashed = false;
+  let smashTime = 0;
+  const clock = new THREE.Clock();
+
+  function triggerSmash() {
+    if (smashed) return;
+    smashed = true;
+    smashTime = clock.getElapsedTime();
+    // hide main building and show debris pieces, with initial velocities
+    buildingMain.visible = false;
+    roof.visible = false;
+    // position debris at building + their local init pos, make visible and give random outward velocities
+    const worldPos = new THREE.Vector3();
+    buildingGroup.getWorldPosition(worldPos);
+    for (let i=0;i<debris.length;i++){
+      const d = debris[i];
+      d.position.copy(d.userData.initPos);
+      // move from building local to world by keeping them as children of buildingGroup (already are)
+      d.visible = true;
+      // compute direction away from impact point (approx starfish position)
+      const pieceWorld = d.getWorldPosition(new THREE.Vector3());
+      const impact = starfish.getWorldPosition(new THREE.Vector3());
+      const dir = new THREE.Vector3().subVectors(pieceWorld, impact).normalize();
+      // add an upward bias and randomness
+      dir.y = 0.4 + Math.random()*0.8;
+      dir.normalize();
+      const speed = 3.2 + Math.random()*3.5;
+      d.userData.velocity.copy(dir.multiplyScalar(speed));
+      // add small angular velocity
+      d.userData.rot = new THREE.Vector3(Math.random()*2, Math.random()*2, Math.random()*2);
+    }
+    // spawn smoke
+    spawnSmoke(worldPos.x, worldPos.y + 0.8, worldPos.z, 18);
+  }
+
+  // animation helper: simple bob + come-forward-and-smash motion
+  let approachSpeed = 1.1; // units/sec
+  function updateStarfish(dt) {
+    // simple breathing/bob
+    const t = clock.getElapsedTime();
+    starfish.position.y = 1 + Math.sin(t*2.2)*0.04;
+    // approach building until within collision distance
+    if (!smashed) {
+      const targetX = buildingGroup.position.x - 1.0; // stop just before building then smash
+      starfish.position.x += approachSpeed * dt;
+      if (starfish.position.x >= targetX) {
+        // do a quick downward slam (tweak)
+        // animate a slam: nudge down and trigger smash shortly after
+        // do a short animated slam over the next frames:
+        // here trigger smash immediately
+        triggerSmash();
+      }
+    }
+    // after smash, give a small recoil
+    if (smashed) {
+      // small recoil effect
+      const elapsed = clock.getElapsedTime() - smashTime;
+      if (elapsed < 0.5) {
+        starfish.position.x += 0.6 * dt; // push slightly forward
+        starfish.rotation.x = -0.3 * Math.sin(elapsed * 10) * (1 - elapsed / 0.5);
+      } else {
+        // relax rotation
+        starfish.rotation.x *= 0.95;
+      }
+    }
+  }
+
+  // update debris (fake physics)
+  const gravity = -9.8;
+  function updateDebris(dt) {
+    if (!smashed) return;
+    for (let i=0;i<debris.length;i++){
+      const d = debris[i];
+      if (!d.visible) continue;
+      // apply gravity to velocity (local)
+      d.userData.velocity.y += gravity * dt * (0.25 + Math.random()*0.25); // scaled gravity for look
+      // move debris in world — but they are children of buildingGroup (we want world movement)
+      // easiest: convert world pos to local, update world pos then set local position accordingly
+      const worldPos = d.getWorldPosition(new THREE.Vector3());
+      worldPos.addScaledVector(d.userData.velocity, dt);
+      // set new local position relative to buildingGroup
+      buildingGroup.worldToLocal(worldPos);
+      d.position.copy(worldPos);
+      // simple rotation (use local rotation)
+      d.rotation.x += d.userData.rot.x * dt;
+      d.rotation.y += d.userData.rot.y * dt;
+      d.rotation.z += d.userData.rot.z * dt;
+      // if piece has gone far down, hide it
+      const worldY = d.getWorldPosition(new THREE.Vector3()).y;
+      if (worldY < -2) d.visible = false;
+    }
+  }
+
+  // update smoke
+  function updateSmoke(dt) {
+    for (let i = smokeParticles.length - 1; i >= 0; i--) {
+      const p = smokeParticles[i];
+      p.userData.life -= dt * 0.6;
+      if (p.userData.life <= 0) {
+        scene.remove(p);
+        smokeParticles.splice(i,1);
+        continue;
+      }
+      p.position.y += p.userData.rise * dt;
+      p.scale.x += p.userData.growth * dt;
+      p.scale.y += p.userData.growth * dt;
+      p.scale.z += p.userData.growth * dt;
+      p.material.opacity = Math.max(0, p.userData.life * 0.6);
+    }
+  }
+
+  // animate
+  function animate() {
+    const dt = Math.min(0.05, clock.getDelta());
+    updateStarfish(dt);
+    updateDebris(dt);
+    updateSmoke(dt);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+  animate();
+
+  // handle resize
+  window.addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  // For quick manual testing: press Space to instantly trigger smash
+  window.addEventListener('keydown', (e)=>{
+    if (e.code === 'Space') triggerSmash();
+  });
+
+  // small helper: inform console
+  console.log('Starfish Smash scene loaded. Press SPACE to trigger smash manually.');
+
+  </script>
+</body>
+</html>

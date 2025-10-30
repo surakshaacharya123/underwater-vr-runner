@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Underwater Environment - Starfish Runner</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: Arial; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; }
+        button { position: absolute; bottom: 20px; left: 20px; padding: 10px 20px; background: #ff6b35; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #gameOver {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9); color: white; padding: 40px; border-radius: 20px;
+            text-align: center; display: none; z-index: 200; border: 3px solid #ff6b35;
+        }
+        #gameOver h1 { color: #ff6b35; margin-bottom: 20px; }
+        #gameOver button { position: static; margin: 10px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>🐙 Underwater Starfish Runner</h3>
+        <div>💰 Coins: <span id="coins">0</span></div>
+        <div>📏 Distance: <span id="distance">0</span>m</div>
+        <div>⚡ Speed: <span id="speed">15</span> m/s</div>
+        <div><small>← → to change lanes, ↑ to jump</small></div>
+    </div>
+    
+    <button onclick="location.reload()">RESTART</button>
+    
+    <div id="gameOver">
+        <h1>💥 GAME OVER!</h1>
+        <div id="finalStats"></div>
+        <button onclick="location.reload()">Play Again</button>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        
+        // Blue-turquoise underwater background
+        scene.background = new THREE.Color(0x006994);
+        scene.fog = new THREE.Fog(0x4682B4, 20, 80);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 8);
+        
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        
+        // Underwater lighting - soft and blue-tinted
+        const ambientLight = new THREE.AmbientLight(0x4682B4, 0.8);
+        scene.add(ambientLight);
+        
+        // Sunlight rays from above
+        const sunlight = new THREE.DirectionalLight(0x87CEEB, 1.2);
+        sunlight.position.set(0, 20, 0);
+        sunlight.castShadow = true;
+        scene.add(sunlight);
+        
+        // Create animated sunlight rays
+        const sunRays = [];
+        for (let i = 0; i < 8; i++) {
+            const rayGeometry = new THREE.CylinderGeometry(0.1, 2, 30, 6);
+            const rayMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x87CEEB, 
+                transparent: true, 
+                opacity: 0.1 
+            });
+            const ray = new THREE.Mesh(rayGeometry, rayMaterial);
+            ray.position.set(
+                (Math.random() - 0.5) * 40,
+                15,
+                (Math.random() - 0.5) * 100
+            );
+            ray.rotation.x = Math.PI;
+            sunRays.push(ray);
+            scene.add(ray);
+        }
+        
+        // Ocean floor with sandy texture
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(300, 300),
+            new THREE.MeshLambertMaterial({ color: 0xC2B280 })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+        
+        // Colorful coral reefs
+        const corals = [];
+        for (let i = 0; i < 40; i++) {
+            const coralColors = [0xFF6B6B, 0xFF8E53, 0xFF6B9D, 0xC44569, 0xF8B500, 0x6C5CE7];
+            const coral = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5 + Math.random() * 1.5, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: coralColors[Math.floor(Math.random() * coralColors.length)]
+                })
+            );
+            coral.position.set(
+                (Math.random() - 0.5) * 200,
+                0.5 + Math.random() * 2,
+                (Math.random() - 0.5) * 200
+            );
+            coral.scale.y = 0.5 + Math.random() * 1.5;
+            corals.push(coral);
+            scene.add(coral);
+        }
+        
+        // Sea plants swaying
+        const seaPlants = [];
+        for (let i = 0; i < 60; i++) {
+            const plant = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.2, 2 + Math.random() * 4, 6),
+                new THREE.MeshStandardMaterial({ color: 0x228B22 })
+            );
+            plant.position.set(
+                (Math.random() - 0.5) * 250,
+                plant.geometry.parameters.height / 2,
+                (Math.random() - 0.5) * 250
+            );
+            seaPlants.push(plant);
+            scene.add(plant);
+        }
+        
+        // Swimming fish
+        const fish = [];
+        for (let i = 0; i < 50; i++) {
+            const fishColors = [0xFF6347, 0x32CD32, 0x1E90FF, 0xFFD700, 0xFF69B4, 0x00CED1];
+            const fishBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2 + Math.random() * 0.3, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: fishColors[Math.floor(Math.random() * fishColors.length)]
+                })
+            );
+            fishBody.scale.z = 2;
+            
+            // Fish tail
+            const tail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.15, 0.3, 6),
+                fishBody.material
+            );
+            tail.position.z = -0.4;
+            tail.rotation.x = Math.PI / 2;
+            fishBody.add(tail);
+            
+            fishBody.position.set(
+                (Math.random() - 0.5) * 150,
+                2 + Math.random() * 8,
+                (Math.random() - 0.5) * 200
+            );
+            
+            fishBody.userData = {
+                speed: 0.5 + Math.random() * 1.5,
+                direction: Math.random() * Math.PI * 2
+            };
+            
+            fish.push(fishBody);
+            scene.add(fishBody);
+        }
+        
+        // Floating bubbles
+        const bubbles = [];
+        for (let i = 0; i < 100; i++) {
+            const bubble = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05 + Math.random() * 0.2, 8, 6),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0x87CEEB, 
+                    transparent: true, 
+                    opacity: 0.3 
+                })
+            );
+            bubble.position.set(
+                (Math.random() - 0.5) * 200,
+                Math.random() * 15,
+                (Math.random() - 0.5) * 200
+            );
+            bubble.userData = {
+                riseSpeed: 0.5 + Math.random() * 1.5
+            };
+            bubbles.push(bubble);
+            scene.add(bubble);
+        }
+        
+        // Lane markers (underwater style)
+        for (let i = -1; i <= 1; i++) {
+            const lane = new THREE.Mesh(
+                new THREE.BoxGeometry(0.3, 0.1, 600),
+                new THREE.MeshBasicMaterial({ color: 0x87CEEB, transparent: true, opacity: 0.5 })
+            );
+            lane.position.set(i * 4, 0.1, 0);
+            scene.add(lane);
+        }
+        
+        // Player character - Starfish (turtle-like movement)
+        const starfish = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.6, 16, 12),
+            new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+        );
+        body.scale.y = 0.5;
+        starfish.add(body);
+        
+        // Starfish limbs
+        for (let i = 0; i < 5; i++) {
+            const limb = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.1, 0.2, 1.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+            );
+            const angle = (i / 5) * Math.PI * 2;
+            limb.position.set(Math.cos(angle) * 0.6, -0.1, Math.sin(angle) * 0.6);
+            limb.rotation.z = Math.PI / 2;
+            limb.rotation.y = -angle;
+            starfish.add(limb);
+        }
+        
+        // Starfish eye
+        const eye = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 12, 8),
+            new THREE.MeshStandardMaterial({ color: 0x000000 })
+        );
+        eye.position.set(0, 0.2, 0.5);
+        starfish.add(eye);
+        
+        starfish.position.set(0, 2, 0);
+        scene.add(starfish);
+        
+        // Finish line
+        const finishZ = -500;
+        const finishBanner = new THREE.Mesh(
+            new THREE.PlaneGeometry(12, 4),
+            new THREE.MeshBasicMaterial({ color: 0xFF0000 })
+        );
+        finishBanner.position.set(0, 5, finishZ);
+        scene.add(finishBanner);
+        
+        // Game state
+        let gameRunning = true;
+        let celebrating = false;
+        let gameTime = 0;
+        let starfishLane = 0;
+        let starfishY = 2;
+        let isJumping = false;
+        let distance = 0;
+        let coins = 0;
+        let speed = 15;
+        
+        // Objects
+        const objects = [];
+        const debris = [];
+        
+        function createCoin(x, z) {
+            const coin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.4, 0.4, 0.2, 8),
+                new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+            );
+            coin.position.set(x, 2, z);
+            coin.userData = { type: 'coin', collected: false };
+            objects.push(coin);
+            scene.add(coin);
+        }
+        
+        function createObstacle(x, z) {
+            const obstacle = new THREE.Mesh(
+                new THREE.BoxGeometry(2.5, 4, 1.5),
+                new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+            );
+            obstacle.position.set(x, 2, z);
+            obstacle.userData = { type: 'obstacle', destroyed: false };
+            objects.push(obstacle);
+            scene.add(obstacle);
+        }
+        
+        function destroyObstacle(obstacle) {
+            if (obstacle.userData.destroyed) return;
+            obstacle.userData.destroyed = true;
+            obstacle.visible = false;
+            
+            for (let i = 0; i < 20; i++) {
+                const piece = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+                    new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+                );
+                piece.position.copy(obstacle.position);
+                piece.position.add(new THREE.Vector3(
+                    (Math.random() - 0.5) * 3,
+                    (Math.random() - 0.5) * 3,
+                    (Math.random() - 0.5) * 3
+                ));
+                piece.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.4,
+                        Math.random() * 0.3 + 0.1,
+                        (Math.random() - 0.5) * 0.4
+                    )
+                };
+                debris.push(piece);
+                scene.add(piece);
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            const finalDistance = Math.floor(Math.abs(starfish.position.z));
+            const totalScore = coins * 10 + Math.floor(finalDistance / 10);
+            
+            document.getElementById('finalStats').innerHTML = `
+                <div style="font-size: 18px; margin: 15px 0;">
+                    <div>🏃 Distance: <strong>${finalDistance}m</strong></div>
+                    <div>💰 Coins: <strong>${coins}</strong></div>
+                    <div>⚡ Speed: <strong>${speed.toFixed(1)} m/s</strong></div>
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(255,107,53,0.2); border-radius: 10px;">
+                        🏆 Score: <strong style="color: #FFD700; font-size: 24px;">${totalScore} points</strong>
+                    </div>
+                </div>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function gameWon() {
+            gameRunning = false;
+            celebrating = true;
+            const finalDistance = Math.floor(Math.abs(starfish.position.z));
+            const timeBonus = Math.max(0, 1000 - Math.floor(gameTime * 10));
+            const totalScore = coins * 20 + timeBonus + 500;
+            
+            document.getElementById('gameOver').innerHTML = `
+                <h1>🏆 VICTORY!</h1>
+                <div style="font-size: 18px; margin: 15px 0;">
+                    <div>🎉 You reached the finish line!</div>
+                    <div>🏃 Distance: <strong>${finalDistance}m</strong></div>
+                    <div>💰 Coins: <strong>${coins}</strong></div>
+                    <div>⚡ Speed: <strong>${speed.toFixed(1)} m/s</strong></div>
+                    <div>⏱️ Time Bonus: <strong>${timeBonus}</strong></div>
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(255,215,0,0.3); border-radius: 10px;">
+                        🏆 CHAMPION SCORE: <strong style="color: #FFD700; font-size: 24px;">${totalScore} points</strong>
+                    </div>
+                </div>
+                <button onclick="location.reload()">Race Again</button>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        // Generate level
+        for (let z = -20; z > finishZ + 10; z -= 10) {
+            for (let lane = -1; lane <= 1; lane++) {
+                if (Math.random() < 0.6) {
+                    createCoin(lane * 4, z);
+                }
+            }
+            if (Math.random() < 0.25) {
+                const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                createObstacle(obsLane * 4, z);
+            }
+        }
+        
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            
+            if (e.code === 'ArrowLeft' && starfishLane > -1) {
+                starfishLane--;
+            }
+            if (e.code === 'ArrowRight' && starfishLane < 1) {
+                starfishLane++;
+            }
+            if (e.code === 'ArrowUp' && !isJumping) {
+                isJumping = true;
+            }
+        });
+        
+        // Animation
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            const deltaTime = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Animate sunlight rays
+            sunRays.forEach((ray, index) => {
+                ray.material.opacity = 0.05 + Math.sin(time + index) * 0.03;
+                ray.rotation.z = Math.sin(time * 0.5 + index) * 0.1;
+            });
+            
+            // Animate bubbles rising
+            bubbles.forEach(bubble => {
+                bubble.position.y += bubble.userData.riseSpeed * deltaTime;
+                bubble.position.x += Math.sin(time + bubble.position.z) * 0.01;
+                if (bubble.position.y > 20) {
+                    bubble.position.y = 0;
+                }
+            });
+            
+            // Animate fish swimming
+            fish.forEach(fishBody => {
+                fishBody.userData.direction += (Math.random() - 0.5) * 0.02;
+                fishBody.position.x += Math.cos(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.z += Math.sin(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.y += Math.sin(time * 2 + fishBody.position.x) * 0.01;
+                fishBody.rotation.y = fishBody.userData.direction;
+            });
+            
+            // Animate sea plants swaying
+            seaPlants.forEach((plant, index) => {
+                plant.rotation.z = Math.sin(time + index * 0.5) * 0.1;
+            });
+            
+            if (gameRunning) {
+                starfish.position.z -= speed * deltaTime;
+                distance += speed * deltaTime;
+                gameTime += deltaTime;
+                
+                const targetX = starfishLane * 4;
+                starfish.position.x += (targetX - starfish.position.x) * 0.15;
+                
+                if (isJumping) {
+                    starfishY += 12 * deltaTime;
+                    if (starfishY > 5) {
+                        starfishY = 5;
+                        isJumping = false;
+                    }
+                } else {
+                    starfishY += (2 - starfishY) * 0.15;
+                }
+                starfish.position.y = starfishY;
+                
+                // Starfish swimming animation
+                starfish.rotation.y = Math.sin(time * 6) * 0.3;
+                starfish.rotation.x = Math.sin(time * 4) * 0.1;
+                starfish.children.forEach((child, i) => {
+                    if (i > 0 && i < 6) {
+                        child.rotation.x = Math.sin(time * 8 + i) * 0.4;
+                    }
+                });
+                
+                objects.forEach(obj => {
+                    if (obj.userData.type === 'coin') {
+                        obj.rotation.y += deltaTime * 4;
+                        obj.position.y = 2 + Math.sin(time * 3 + obj.position.x) * 0.2;
+                    }
+                });
+                
+                objects.forEach(obj => {
+                    const dx = Math.abs(starfish.position.x - obj.position.x);
+                    const dy = Math.abs(starfish.position.y - obj.position.y);
+                    const dz = Math.abs(starfish.position.z - obj.position.z);
+                    
+                    if (dx < 1.5 && dy < 1.5 && dz < 2.5) {
+                        if (obj.userData.type === 'coin' && !obj.userData.collected) {
+                            obj.userData.collected = true;
+                            obj.visible = false;
+                            coins++;
+                            speed += 0.3;
+                        } else if (obj.userData.type === 'obstacle' && !obj.userData.destroyed) {
+                            destroyObstacle(obj);
+                            gameOver();
+                        }
+                    }
+                });
+                
+                if (starfish.position.z <= finishZ) {
+                    gameWon();
+                }
+                
+                camera.position.z = starfish.position.z + 8;
+                camera.position.x = starfish.position.x * 0.2;
+                camera.lookAt(starfish.position.x, starfish.position.y, starfish.position.z);
+                
+                document.getElementById('coins').textContent = coins;
+                document.getElementById('distance').textContent = Math.floor(Math.abs(starfish.position.z));
+                document.getElementById('speed').textContent = speed.toFixed(1);
+            }
+            
+            if (celebrating) {
+                starfish.position.y = 2 + Math.sin(time * 12) * 0.8;
+                starfish.rotation.y = time * 4;
+                starfish.children.forEach((child, i) => {
+                    if (i > 0 && i < 6) {
+                        child.rotation.x = Math.sin(time * 15 + i) * 0.8;
+                    }
+                });
+            }
+            
+            debris.forEach((piece, index) => {
+                piece.userData.velocity.y -= 0.008;
+                piece.position.add(piece.userData.velocity);
+                piece.rotation.x += 0.03;
+                piece.rotation.z += 0.02;
+                
+                if (piece.position.y < -5) {
+                    scene.remove(piece);
+                    debris.splice(index, 1);
+                }
+            });
+            
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+        
+        console.log('🐙 Underwater Starfish Runner! ← → to change lanes, ↑ to jump');
+    </script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VR Test for Quest</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial; background: #001122; color: white; }
+        .status { padding: 20px; margin: 10px 0; border-radius: 10px; }
+        .success { background: #004400; }
+        .error { background: #440000; }
+        .warning { background: #444400; }
+        button { padding: 15px 30px; font-size: 18px; margin: 10px; border: none; border-radius: 10px; cursor: pointer; }
+        #vrButton { background: #ff6b35; color: white; }
+        #vrButton:disabled { background: #666; }
+    </style>
+</head>
+<body>
+    <h1>🥽 Quest VR Compatibility Test</h1>
+    
+    <div id="results"></div>
+    
+    <button id="vrButton" disabled>Testing VR...</button>
+    
+    <div class="status warning">
+        <h3>📋 Quest Setup Instructions:</h3>
+        <ol>
+            <li><strong>Use Oculus Browser</strong> (not Chrome/Firefox)</li>
+            <li><strong>Enable Developer Mode</strong> on Quest</li>
+            <li><strong>Allow VR permissions</strong> when prompted</li>
+            <li><strong>Serve over HTTPS</strong> or localhost</li>
+        </ol>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script>
+        const results = document.getElementById('results');
+        const vrButton = document.getElementById('vrButton');
+        
+        function addResult(message, type = 'status') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+        
+        // Test WebXR availability
+        async function testVR() {
+            addResult('🔍 Testing WebXR support...', 'status');
+            
+            // Check if WebXR exists
+            if (!navigator.xr) {
+                addResult('❌ WebXR not available in this browser', 'error');
+                addResult('💡 Solution: Use <strong>Oculus Browser</strong> on Quest', 'warning');
+                return false;
+            }
+            
+            addResult('✅ WebXR API found', 'success');
+            
+            // Check VR session support
+            try {
+                const supported = await navigator.xr.isSessionSupported('immersive-vr');
+                if (supported) {
+                    addResult('✅ VR sessions supported!', 'success');
+                    vrButton.textContent = 'Enter VR';
+                    vrButton.disabled = false;
+                    return true;
+                } else {
+                    addResult('❌ VR sessions not supported', 'error');
+                    return false;
+                }
+            } catch (error) {
+                addResult(`❌ VR test failed: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // VR Button handler
+        vrButton.addEventListener('click', async () => {
+            try {
+                addResult('🚀 Requesting VR session...', 'status');
+                
+                const session = await navigator.xr.requestSession('immersive-vr', {
+                    requiredFeatures: ['local-floor']
+                });
+                
+                addResult('🎉 VR session started successfully!', 'success');
+                addResult('🎮 You can now use VR controllers', 'success');
+                
+                vrButton.textContent = 'Exit VR';
+                vrButton.onclick = () => session.end();
+                
+                session.addEventListener('end', () => {
+                    addResult('👋 VR session ended', 'status');
+                    vrButton.textContent = 'Enter VR';
+                    vrButton.onclick = vrButton.click;
+                });
+                
+            } catch (error) {
+                addResult(`❌ VR session failed: ${error.message}`, 'error');
+                
+                if (error.message.includes('secure context')) {
+                    addResult('💡 Solution: Use HTTPS or localhost', 'warning');
+                } else if (error.message.includes('not supported')) {
+                    addResult('💡 Solution: Enable WebXR in browser settings', 'warning');
+                }
+            }
+        });
+        
+        // Run tests
+        testVR();
+        
+        // Show browser info
+        addResult(`🌐 Browser: ${navigator.userAgent}`, 'status');
+        addResult(`🔒 Secure Context: ${window.isSecureContext ? 'Yes' : 'No'}`, window.isSecureContext ? 'success' : 'error');
+    </script>
+</body>
+</html>
