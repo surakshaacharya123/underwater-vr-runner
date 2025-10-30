@@ -1,445 +1,785 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>VR Underwater Starfish Runner</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kev the Annoyer - 3D Destruction Simulation</title>
+    <!-- Three.js and WebXR CDN Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/VRButton.js"></script>
+    
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #000; 
-            font-family: Arial, sans-serif;
+        body { margin: 0; overflow: hidden; background: #001122; font-family: Arial; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; z-index: 100; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 100; }
+        .btn { padding: 12px 20px; background: #ff6b35; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #ff8c5a; }
+        #instructions { position: absolute; bottom: 20px; left: 20px; color: white; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; z-index: 100; }
+        #vrButton { position: absolute; bottom: 20px; right: 20px; padding: 15px 25px; background: #4CAF50; color: white; border: none; border-radius: 10px; cursor: pointer; font-size: 16px; z-index: 100; }
+        #gameOver {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9); color: white; padding: 40px; border-radius: 20px;
+            text-align: center; display: none; z-index: 200; border: 3px solid #ff6b35;
         }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: white;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 100;
-        }
-        #controls {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            z-index: 100;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 5px;
-            background: #ff6b35;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover { background: #ff8c42; }
-        button:disabled { background: #666; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <div id="info">
-        <h3>🐙 Kev the Annoyer</h3>
-        <p>Click "SMASH!" or press SPACE to trigger destruction</p>
-        <p>Use mouse to orbit camera</p>
+    <div id="ui">
+        <h3>🐠 VR Underwater Starfish Runner</h3>
+        <div>💰 Coins: <span id="coins">0</span></div>
+        <div>📏 Distance: <span id="distance">0</span>m</div>
+        <div>⚡ Speed: <span id="speed">15</span> m/s</div>
+    </div>
+    
+    <div id="instructions">
+        <div>🥽 VR: Use controllers to move lanes & jump</div>
+        <div>💻 Desktop: ← → ↑ keys</div>
+        <div>💰 Collect coins to increase speed</div>
+        <div>🎵 Click anywhere to enable audio</div>
     </div>
     
     <div id="controls">
-        <button id="smashBtn">SMASH!</button>
-        <button id="resetBtn">Reset</button>
-        <button id="vrBtn" style="display:none;">Enter VR</button>
+        <button class="btn" id="leftBtn">←</button>
+        <button class="btn" id="upBtn">↑</button>
+        <button class="btn" id="rightBtn">→</button>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r158/three.min.js"></script>
-
+    
+    <button id="vrButton">Enter VR</button>
+    
+    <!-- Background Music -->
+    <audio id="bgMusic" loop>
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" type="audio/wav">
+    </audio>
+    
+    <div id="gameOver">
+        <h1>🏆 GAME OVER!</h1>
+        <div id="finalStats"></div>
+        <button class="btn" onclick="location.reload()">Play Again</button>
+    </div>
+    
     <script>
         // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 10, 50);
-
+        scene.background = new THREE.Color(0x002244);
+        scene.fog = new THREE.Fog(0x004477, 25, 100);
+        
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 10);
-
+        camera.position.set(0, 3, 5);
+        
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.xr.enabled = true;
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
-
-        // Simple mouse controls
-        let mouseX = 0, mouseY = 0;
-        document.addEventListener('mousemove', (e) => {
-            mouseX = (e.clientX / window.innerWidth) * 2 - 1;
-            mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
-        });
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
-        scene.add(ambientLight);
-
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(10, 10, 5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        scene.add(directionalLight);
-
-        // Ground
-        const groundGeometry = new THREE.PlaneGeometry(50, 50);
-        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
-
-        const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ mass: 0 });
-        groundBody.addShape(groundShape);
-        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-        world.add(groundBody);
-
-        // Starfish creation
-        function createStarfish() {
-            const group = new THREE.Group();
-            
-            // Main body
-            const bodyGeometry = new THREE.SphereGeometry(0.8, 16, 12);
-            const bodyMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0xff6b35,
-                roughness: 0.7,
-                metalness: 0.1
-            });
-            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.scale.y = 0.6;
-            body.castShadow = true;
-            group.add(body);
-
-            // Five limbs
-            const limbGeometry = new THREE.CylinderGeometry(0.15, 0.25, 1.5, 8);
-            const limbs = [];
-            
-            for (let i = 0; i < 5; i++) {
-                const limb = new THREE.Mesh(limbGeometry, bodyMaterial.clone());
-                const angle = (i / 5) * Math.PI * 2;
-                limb.position.set(Math.cos(angle) * 0.8, -0.2, Math.sin(angle) * 0.8);
-                limb.rotation.z = Math.PI / 2;
-                limb.rotation.y = -angle;
-                limb.castShadow = true;
-                limbs.push(limb);
-                group.add(limb);
-            }
-
-            // Eye
-            const eyeGeometry = new THREE.SphereGeometry(0.15, 12, 8);
-            const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-            const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-            eye.position.set(0, 0.2, 0.6);
-            eye.castShadow = true;
-            group.add(eye);
-
-            // Pupil
-            const pupilGeometry = new THREE.SphereGeometry(0.08, 8, 6);
-            const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-            pupil.position.set(0, 0.22, 0.68);
-            group.add(pupil);
-
-            group.position.set(-8, 2, 0);
-            group.userData = { limbs, originalY: 2 };
-            return group;
-        }
-
-        // Building creation
-        function createBuilding() {
-            const buildingGroup = new THREE.Group();
-            const blocks = [];
-            const bodies = [];
-
-            const blockMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-            const blockShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.25, 0.5));
-
-            // Create building blocks
-            for (let y = 0; y < 8; y++) {
-                for (let x = 0; x < 4; x++) {
-                    for (let z = 0; z < 4; z++) {
-                        const blockGeometry = new THREE.BoxGeometry(1, 0.5, 1);
-                        const block = new THREE.Mesh(blockGeometry, blockMaterial.clone());
-                        
-                        block.position.set(x - 1.5, y * 0.5 + 0.25, z - 1.5);
-                        block.castShadow = true;
-                        block.receiveShadow = true;
-                        
-                        const blockBody = new CANNON.Body({ mass: 1 });
-                        blockBody.addShape(blockShape);
-                        blockBody.position.copy(block.position);
-                        
-                        blocks.push(block);
-                        bodies.push(blockBody);
-                        buildingGroup.add(block);
-                        world.add(blockBody);
-                    }
-                }
-            }
-
-            buildingGroup.position.set(2, 0, 0);
-            buildingGroup.userData = { blocks, bodies };
-            return buildingGroup;
-        }
-
-        // Particle system for debris and smoke
-        class ParticleSystem {
-            constructor() {
-                this.particles = [];
-            }
-
-            createExplosion(position, count = 50) {
-                for (let i = 0; i < count; i++) {
-                    const geometry = new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 4, 4);
-                    const material = new THREE.MeshBasicMaterial({ 
-                        color: new THREE.Color().setHSL(0.1, 0.7, 0.3 + Math.random() * 0.4),
-                        transparent: true,
-                        opacity: 0.8
-                    });
-                    
-                    const particle = new THREE.Mesh(geometry, material);
-                    particle.position.copy(position);
-                    particle.position.add(new THREE.Vector3(
-                        (Math.random() - 0.5) * 2,
-                        Math.random() * 2,
-                        (Math.random() - 0.5) * 2
-                    ));
-                    
-                    particle.userData = {
-                        velocity: new THREE.Vector3(
-                            (Math.random() - 0.5) * 10,
-                            Math.random() * 8 + 2,
-                            (Math.random() - 0.5) * 10
-                        ),
-                        life: 1.0,
-                        decay: 0.5 + Math.random() * 0.5
-                    };
-                    
-                    this.particles.push(particle);
-                    scene.add(particle);
-                }
-            }
-
-            update(deltaTime) {
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    const particle = this.particles[i];
-                    const userData = particle.userData;
-                    
-                    // Update position
-                    particle.position.add(userData.velocity.clone().multiplyScalar(deltaTime));
-                    userData.velocity.y -= 9.82 * deltaTime; // Gravity
-                    
-                    // Update life
-                    userData.life -= userData.decay * deltaTime;
-                    particle.material.opacity = userData.life;
-                    
-                    // Remove dead particles
-                    if (userData.life <= 0 || particle.position.y < -5) {
-                        scene.remove(particle);
-                        this.particles.splice(i, 1);
-                    }
-                }
-            }
-        }
-
-        // Initialize objects
-        const starfish = createStarfish();
-        const building = createBuilding();
-        const particleSystem = new ParticleSystem();
         
+        // VR Setup
+        document.getElementById('vrButton').addEventListener('click', async () => {
+            try {
+                if (renderer.xr.isPresenting) {
+                    renderer.xr.getSession().end();
+                } else {
+                    const session = await navigator.xr.requestSession('immersive-vr', {
+                        requiredFeatures: ['local-floor']
+                    });
+                    renderer.xr.setSession(session);
+                }
+            } catch (err) {
+                console.log('VR not supported:', err);
+                alert('VR not supported on this device');
+            }
+        });
+        
+        // Enhanced underwater lighting system
+        const ambientLight = new THREE.AmbientLight(0x4499dd, 1.2);
+        scene.add(ambientLight);
+        
+        const sunlight = new THREE.DirectionalLight(0x88ccff, 2.5);
+        sunlight.position.set(0, 40, 20);
+        sunlight.castShadow = true;
+        sunlight.shadow.mapSize.width = 4096;
+        sunlight.shadow.mapSize.height = 4096;
+        sunlight.shadow.camera.near = 0.1;
+        sunlight.shadow.camera.far = 100;
+        sunlight.shadow.camera.left = -50;
+        sunlight.shadow.camera.right = 50;
+        sunlight.shadow.camera.top = 50;
+        sunlight.shadow.camera.bottom = -50;
+        scene.add(sunlight);
+        
+        // Multiple underwater point lights for depth
+        const underwaterLight1 = new THREE.PointLight(0x66aaff, 2.0, 80);
+        underwaterLight1.position.set(-30, 20, -150);
+        scene.add(underwaterLight1);
+        
+        const underwaterLight2 = new THREE.PointLight(0x88ddff, 1.8, 70);
+        underwaterLight2.position.set(30, 18, -300);
+        scene.add(underwaterLight2);
+        
+        const underwaterLight3 = new THREE.PointLight(0xaaeeff, 1.5, 60);
+        underwaterLight3.position.set(0, 25, -500);
+        scene.add(underwaterLight3);
+        
+        // Dynamic caustic spotlight
+        const causticLight = new THREE.SpotLight(0xbbffff, 3.0, 120, Math.PI / 4, 0.2);
+        causticLight.position.set(0, 35, 0);
+        causticLight.target.position.set(0, 0, -100);
+        causticLight.castShadow = true;
+        scene.add(causticLight);
+        scene.add(causticLight.target);
+        
+        // Enhanced volumetric sunlight rays
+        const sunRays = [];
+        for (let i = 0; i < 25; i++) {
+            const rayGeometry = new THREE.CylinderGeometry(0.1, 2.5, 60, 12);
+            const rayMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x99ddff, 
+                transparent: true, 
+                opacity: 0.15 + Math.random() * 0.1
+            });
+            const ray = new THREE.Mesh(rayGeometry, rayMaterial);
+            ray.position.set(
+                (Math.random() - 0.5) * 100,
+                30,
+                (Math.random() - 0.5) * 400
+            );
+            ray.rotation.x = Math.PI;
+            ray.rotation.z = (Math.random() - 0.5) * 0.2;
+            sunRays.push(ray);
+            scene.add(ray);
+        }
+        
+        // Enhanced ocean floor with better materials
+        const oceanFloor = new THREE.Mesh(
+            new THREE.PlaneGeometry(800, 800),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xa68b5b,
+                roughness: 0.9,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.95
+            })
+        );
+        oceanFloor.rotation.x = -Math.PI / 2;
+        oceanFloor.receiveShadow = true;
+        scene.add(oceanFloor);
+        
+        // Add sand ripples and texture
+        const sandRipples = new THREE.Group();
+        for (let i = 0; i < 300; i++) {
+            const ripple = new THREE.Mesh(
+                new THREE.RingGeometry(0.1, 0.3 + Math.random() * 0.5, 8),
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xc4a373,
+                    transparent: true,
+                    opacity: 0.3
+                })
+            );
+            ripple.position.set(
+                (Math.random() - 0.5) * 600,
+                0.01,
+                (Math.random() - 0.5) * 600
+            );
+            ripple.rotation.x = -Math.PI / 2;
+            sandRipples.add(ripple);
+        }
+        scene.add(sandRipples);
+        
+        // Colorful coral reef
+        const corals = [];
+        for (let i = 0; i < 60; i++) {
+            const coralColors = [0xFF6B6B, 0xFF8E53, 0xFF6B9D, 0xC44569, 0xF8B500, 0x6C5CE7, 0xFF1744, 0x00E676];
+            const coralGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 2, 8, 6);
+            const coral = new THREE.Mesh(
+                coralGeometry,
+                new THREE.MeshStandardMaterial({ 
+                    color: coralColors[Math.floor(Math.random() * coralColors.length)]
+                })
+            );
+            coral.position.set(
+                (Math.random() - 0.5) * 300,
+                0.5 + Math.random() * 3,
+                (Math.random() - 0.5) * 300
+            );
+            coral.scale.y = 0.5 + Math.random() * 2;
+            corals.push(coral);
+            scene.add(coral);
+        }
+        
+        // Swaying sea plants
+        const seaPlants = [];
+        for (let i = 0; i < 80; i++) {
+            const plant = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.03, 0.15, 1.5 + Math.random() * 5, 8),
+                new THREE.MeshStandardMaterial({ color: 0x228B22 })
+            );
+            plant.position.set(
+                (Math.random() - 0.5) * 350,
+                plant.geometry.parameters.height / 2,
+                (Math.random() - 0.5) * 350
+            );
+            seaPlants.push(plant);
+            scene.add(plant);
+        }
+        
+        // Swimming fish school
+        const fish = [];
+        for (let i = 0; i < 80; i++) {
+            const fishColors = [0xFF6347, 0x32CD32, 0x1E90FF, 0xFFD700, 0xFF69B4, 0x00CED1, 0xFF4500, 0x9370DB];
+            const fishBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15 + Math.random() * 0.25, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: fishColors[Math.floor(Math.random() * fishColors.length)]
+                })
+            );
+            fishBody.scale.z = 2.5;
+            
+            // Fish tail
+            const tail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.1, 0.25, 6),
+                fishBody.material
+            );
+            tail.position.z = -0.3;
+            tail.rotation.x = Math.PI / 2;
+            fishBody.add(tail);
+            
+            fishBody.position.set(
+                (Math.random() - 0.5) * 200,
+                1 + Math.random() * 12,
+                (Math.random() - 0.5) * 300
+            );
+            
+            fishBody.userData = {
+                speed: 0.8 + Math.random() * 2,
+                direction: Math.random() * Math.PI * 2,
+                swimHeight: fishBody.position.y
+            };
+            
+            fish.push(fishBody);
+            scene.add(fishBody);
+        }
+        
+        // Enhanced floating bubbles with better lighting interaction
+        const bubbles = [];
+        for (let i = 0; i < 200; i++) {
+            const bubble = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05 + Math.random() * 0.2, 12, 8),
+                new THREE.MeshPhysicalMaterial({ 
+                    color: 0xccffff,
+                    transparent: true,
+                    opacity: 0.6,
+                    transmission: 0.9,
+                    roughness: 0.0,
+                    metalness: 0.0,
+                    clearcoat: 1.0,
+                    clearcoatRoughness: 0.0
+                })
+            );
+            bubble.position.set(
+                (Math.random() - 0.5) * 400,
+                Math.random() * 25,
+                (Math.random() - 0.5) * 600
+            );
+            bubble.userData = {
+                riseSpeed: 0.5 + Math.random() * 1.5,
+                sway: Math.random() * 0.03,
+                originalOpacity: bubble.material.opacity
+            };
+            bubbles.push(bubble);
+            scene.add(bubble);
+        }
+        
+        // Race track lanes
+        for (let i = -1; i <= 1; i++) {
+            const lane = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 0.1, 800),
+                new THREE.MeshBasicMaterial({ color: 0x66AAFF, transparent: true, opacity: 0.3 })
+            );
+            lane.position.set(i * 5, 0.2, 0);
+            scene.add(lane);
+        }
+        
+        // Player starfish (previous simple design)
+        const starfish = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.8, 16, 12),
+            new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+        );
+        body.scale.y = 0.4;
+        starfish.add(body);
+        
+        // Starfish limbs
+        const starfishLimbs = [];
+        for (let i = 0; i < 5; i++) {
+            const limb = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.15, 1.5, 8),
+                new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+            );
+            const angle = (i / 5) * Math.PI * 2;
+            limb.position.set(Math.cos(angle) * 0.7, -0.1, Math.sin(angle) * 0.7);
+            limb.rotation.z = Math.PI / 2;
+            limb.rotation.y = -angle;
+            starfishLimbs.push(limb);
+            starfish.add(limb);
+        }
+        
+        // Starfish eye
+        const eye = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 12, 8),
+            new THREE.MeshStandardMaterial({ color: 0x000000 })
+        );
+        eye.position.set(0, 0.3, 0.6);
+        starfish.add(eye);
+        
+        starfish.position.set(0, 3, 0);
         scene.add(starfish);
-        scene.add(building);
-
-        // Animation state
-        let isSmashing = false;
-        let hasSmashed = false;
+        
+        // Game state
+        let gameRunning = true;
+        let starfishLane = 0;
+        let starfishY = 3;
+        let isJumping = false;
+        let distance = 0;
+        let coins = 0;
+        let speed = 18;
+        const FINISH_DISTANCE = 1000;
+        let gameWon = false;
+        let gameStartTime = Date.now();
+        
+        // VR Controllers
+        const controller1 = renderer.xr.getController(0);
+        const controller2 = renderer.xr.getController(1);
+        scene.add(controller1);
+        scene.add(controller2);
+        
+        // Controller event listeners
+        controller1.addEventListener('selectstart', () => {
+            if (gameRunning && starfishLane > -1) starfishLane--;
+        });
+        
+        controller2.addEventListener('selectstart', () => {
+            if (gameRunning && starfishLane < 1) starfishLane++;
+        });
+        
+        controller1.addEventListener('squeezestart', () => {
+            if (gameRunning && !isJumping) isJumping = true;
+        });
+        
+        controller2.addEventListener('squeezestart', () => {
+            if (gameRunning && !isJumping) isJumping = true;
+        });
+        
+        // Objects and debris
+        const objects = [];
+        const debris = [];
+        
+        function createCoin(x, z) {
+            const coin = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.5, 0.2, 8),
+                new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+            );
+            coin.position.set(x, 3, z);
+            coin.userData = { type: 'coin', collected: false };
+            objects.push(coin);
+            scene.add(coin);
+        }
+        
+        function createObstacle(x, z) {
+            const obstacle = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 5, 2),
+                new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+            );
+            obstacle.position.set(x, 2.5, z);
+            obstacle.userData = { type: 'obstacle', destroyed: false };
+            objects.push(obstacle);
+            scene.add(obstacle);
+        }
+        
+        function destroyObstacle(obstacle) {
+            if (obstacle.userData.destroyed) return;
+            obstacle.userData.destroyed = true;
+            obstacle.visible = false;
+            
+            // Create small cube debris
+            for (let i = 0; i < 25; i++) {
+                const piece = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 0.3, 0.3),
+                    new THREE.MeshStandardMaterial({ color: 0x8B4513 })
+                );
+                piece.position.copy(obstacle.position);
+                piece.position.add(new THREE.Vector3(
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4,
+                    (Math.random() - 0.5) * 4
+                ));
+                piece.userData = {
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.5,
+                        Math.random() * 0.4 + 0.1,
+                        (Math.random() - 0.5) * 0.5
+                    )
+                };
+                debris.push(piece);
+                scene.add(piece);
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            const finalDistance = Math.floor(Math.abs(starfish.position.z));
+            const totalScore = coins * 15 + Math.floor(finalDistance / 10);
+            const gameTime = ((Date.now() - gameStartTime) / 1000).toFixed(1);
+            const avgSpeed = (finalDistance / parseFloat(gameTime)).toFixed(1);
+            
+            document.getElementById('finalStats').innerHTML = `
+                <div style="font-size: 18px; margin: 15px 0;">
+                    <div>🏃 Distance Covered: <strong>${finalDistance}m</strong></div>
+                    <div>💰 Coins Collected: <strong>${coins}</strong></div>
+                    <div>⚡ Final Speed: <strong>${speed.toFixed(1)} m/s</strong></div>
+                    <div>⏱️ Time: <strong>${gameTime}s</strong></div>
+                    <div>📊 Avg Speed: <strong>${avgSpeed} m/s</strong></div>
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(255,107,53,0.2); border-radius: 10px;">
+                        🏆 Final Score: <strong style="color: #FFD700; font-size: 24px;">${totalScore} points</strong>
+                    </div>
+                </div>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        function showVictory() {
+            gameRunning = false;
+            gameWon = true;
+            // Victory sound effect
+            if (globalAudioContext) {
+                try {
+                    const notes = [523, 659, 784, 1047];
+                    notes.forEach((freq, i) => {
+                        setTimeout(() => {
+                            const osc = globalAudioContext.createOscillator();
+                            const gain = globalAudioContext.createGain();
+                            osc.connect(gain);
+                            gain.connect(globalAudioContext.destination);
+                            osc.frequency.setValueAtTime(freq, globalAudioContext.currentTime);
+                            gain.gain.setValueAtTime(0.2, globalAudioContext.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, globalAudioContext.currentTime + 0.2);
+                            osc.start();
+                            osc.stop(globalAudioContext.currentTime + 0.2);
+                        }, i * 100);
+                    });
+                } catch(e) {}
+            }
+            const gameTime = ((Date.now() - gameStartTime) / 1000).toFixed(1);
+            const avgSpeed = (FINISH_DISTANCE / parseFloat(gameTime)).toFixed(1);
+            const totalScore = coins * 20 + FINISH_DISTANCE + Math.floor(1000 / parseFloat(gameTime));
+            
+            document.querySelector('#gameOver h1').innerHTML = '🏆 CONGRATULATIONS! 🎉';
+            document.getElementById('finalStats').innerHTML = `
+                <div style="font-size: 20px; margin: 20px 0; color: #4CAF50;">
+                    <h3 style="color: #FFD700;">🌟 YOU WON THE RACE! 🌟</h3>
+                    <div style="margin: 15px 0;">
+                        <div>🏁 Distance Completed: <strong>${FINISH_DISTANCE}m</strong></div>
+                        <div>⏱️ Completion Time: <strong>${gameTime}s</strong></div>
+                        <div>🚀 Average Speed: <strong>${avgSpeed} m/s</strong></div>
+                        <div>💰 Coins Collected: <strong>${coins}</strong></div>
+                        <div style="margin-top: 25px; padding: 20px; background: linear-gradient(45deg, #FFD700, #FFA500); border-radius: 15px; color: #000;">
+                            🏆 CHAMPION SCORE: <strong style="font-size: 28px;">${totalScore} points</strong>
+                        </div>
+                        <div style="margin-top: 15px; font-style: italic; color: #87CEEB;">
+                            "Amazing underwater adventure completed! You're a true ocean champion!" 🐠
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+        
+        // Create finish line
+        function createFinishLine() {
+            const finishGroup = new THREE.Group();
+            
+            // Golden pillars
+            const pillarGeometry = new THREE.CylinderGeometry(1, 1, 15);
+            const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+            
+            const leftPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            leftPillar.position.set(-8, 7.5, -FINISH_DISTANCE);
+            finishGroup.add(leftPillar);
+            
+            const rightPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+            rightPillar.position.set(8, 7.5, -FINISH_DISTANCE);
+            finishGroup.add(rightPillar);
+            
+            // Victory arch
+            const archGeometry = new THREE.TorusGeometry(10, 1, 8, 16, Math.PI);
+            const archMaterial = new THREE.MeshStandardMaterial({ color: 0x32CD32 });
+            const arch = new THREE.Mesh(archGeometry, archMaterial);
+            arch.position.set(0, 10, -FINISH_DISTANCE);
+            arch.rotation.x = Math.PI;
+            finishGroup.add(arch);
+            
+            scene.add(finishGroup);
+        }
+        
+        createFinishLine();
+        
+        // Generate enhanced level with more coins
+        for (let z = -25; z > -FINISH_DISTANCE - 100; z -= 8) {
+            for (let lane = -1; lane <= 1; lane++) {
+                if (Math.random() < 0.7) {
+                    createCoin(lane * 5, z);
+                }
+            }
+            // Add coin clusters occasionally
+            if (Math.random() < 0.3) {
+                const clusterLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                for (let i = 0; i < 3; i++) {
+                    createCoin(clusterLane * 5, z - i * 2);
+                }
+            }
+            if (Math.random() < 0.18 && z > -FINISH_DISTANCE + 50) {
+                const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                createObstacle(obsLane * 5, z);
+            }
+        }
+        
+        // Desktop controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            
+            if (e.code === 'ArrowLeft' && starfishLane > -1) {
+                starfishLane--;
+            }
+            if (e.code === 'ArrowRight' && starfishLane < 1) {
+                starfishLane++;
+            }
+            if (e.code === 'ArrowUp' && !isJumping) {
+                isJumping = true;
+            }
+        });
+        
+        // Touch controls
+        document.getElementById('leftBtn').onclick = () => {
+            if (gameRunning && starfishLane > -1) starfishLane--;
+        };
+        
+        document.getElementById('rightBtn').onclick = () => {
+            if (gameRunning && starfishLane < 1) starfishLane++;
+        };
+        
+        document.getElementById('upBtn').onclick = () => {
+            if (gameRunning && !isJumping) isJumping = true;
+        };
+        
+        // Animation
         const clock = new THREE.Clock();
-
-        // Starfish animation
-        function animateStarfish() {
+        
+        function animate() {
+            const deltaTime = clock.getDelta();
             const time = clock.getElapsedTime();
             
-            // Breathing animation
-            starfish.scale.y = 1 + Math.sin(time * 2) * 0.05;
+            // Enhanced underwater environment animation
+            sunRays.forEach((ray, index) => {
+                ray.material.opacity = 0.12 + Math.sin(time * 0.8 + index) * 0.06;
+                ray.rotation.z = Math.sin(time * 0.4 + index) * 0.1;
+                ray.position.x += Math.sin(time * 0.2 + index) * 0.5;
+            });
             
-            // Limb animation
-            if (starfish.userData.limbs) {
-                starfish.userData.limbs.forEach((limb, index) => {
-                    limb.rotation.x = Math.sin(time * 3 + index) * 0.2;
-                });
-            }
+            // Animate caustic lighting for realistic underwater effect
+            causticLight.intensity = 2.5 + Math.sin(time * 3) * 1.0;
+            causticLight.position.x = Math.sin(time * 0.5) * 15;
+            causticLight.position.z = starfish.position.z + Math.cos(time * 0.6) * 20;
+            causticLight.target.position.x = starfish.position.x;
+            causticLight.target.position.z = starfish.position.z - 50;
             
-            // Floating animation
-            if (!isSmashing) {
-                starfish.position.y = starfish.userData.originalY + Math.sin(time * 1.5) * 0.3;
-            }
-        }
-
-        // Smash animation
-        function triggerSmash() {
-            if (isSmashing || hasSmashed) return;
+            // Animate underwater point lights
+            underwaterLight1.intensity = 1.8 + Math.sin(time * 1.5) * 0.4;
+            underwaterLight2.intensity = 1.6 + Math.cos(time * 1.2) * 0.3;
+            underwaterLight3.intensity = 1.3 + Math.sin(time * 0.8) * 0.2;
             
-            isSmashing = true;
-            hasSmashed = true;
-            
-            // Animate starfish movement
-            gsap.to(starfish.position, {
-                duration: 2,
-                x: 2,
-                y: 1,
-                z: 0,
-                ease: "power2.inOut",
-                onComplete: () => {
-                    // Impact!
-                    particleSystem.createExplosion(new THREE.Vector3(2, 2, 0), 100);
-                    
-                    // Apply forces to building blocks
-                    building.userData.bodies.forEach((body, index) => {
-                        const force = new CANNON.Vec3(
-                            (Math.random() - 0.5) * 500,
-                            Math.random() * 300 + 100,
-                            (Math.random() - 0.5) * 500
-                        );
-                        body.applyImpulse(force, body.position);
-                    });
-                    
-                    // Camera shake
-                    gsap.to(camera.position, {
-                        duration: 0.5,
-                        x: camera.position.x + (Math.random() - 0.5) * 2,
-                        y: camera.position.y + (Math.random() - 0.5) * 2,
-                        z: camera.position.z + (Math.random() - 0.5) * 2,
-                        ease: "power2.out"
-                    });
-                    
-                    isSmashing = false;
+            bubbles.forEach(bubble => {
+                bubble.position.y += bubble.userData.riseSpeed * deltaTime;
+                bubble.position.x += Math.sin(time + bubble.position.z * 0.01) * bubble.userData.sway;
+                bubble.material.opacity = bubble.userData.originalOpacity * (0.8 + Math.sin(time * 4 + bubble.position.x) * 0.2);
+                bubble.rotation.x += deltaTime * 0.5;
+                bubble.rotation.y += deltaTime * 0.3;
+                if (bubble.position.y > 30) {
+                    bubble.position.y = -2;
+                    bubble.position.z = starfish.position.z + (Math.random() - 0.5) * 400;
                 }
             });
             
-            // Starfish rotation during smash
-            gsap.to(starfish.rotation, {
-                duration: 2,
-                x: Math.PI * 2,
-                ease: "power2.inOut"
-            });
-        }
-
-        // Reset function
-        function resetScene() {
-            hasSmashed = false;
-            isSmashing = false;
-            
-            // Reset starfish
-            gsap.to(starfish.position, {
-                duration: 1,
-                x: -8,
-                y: 2,
-                z: 0
-            });
-            gsap.to(starfish.rotation, {
-                duration: 1,
-                x: 0,
-                y: 0,
-                z: 0
+            fish.forEach(fishBody => {
+                fishBody.userData.direction += (Math.random() - 0.5) * 0.015;
+                fishBody.position.x += Math.cos(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.z += Math.sin(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
+                fishBody.position.y = fishBody.userData.swimHeight + Math.sin(time * 3 + fishBody.position.x * 0.1) * 0.5;
+                fishBody.rotation.y = fishBody.userData.direction;
             });
             
-            // Reset building
-            building.userData.bodies.forEach((body, index) => {
-                const block = building.userData.blocks[index];
-                const originalPos = new THREE.Vector3(
-                    (index % 16) % 4 - 1.5,
-                    Math.floor((index % 64) / 16) * 0.5 + 0.25,
-                    Math.floor(index / 16) - 1.5
-                );
+            seaPlants.forEach((plant, index) => {
+                plant.rotation.z = Math.sin(time * 0.8 + index * 0.3) * 0.15;
+            });
+            
+            if (gameRunning) {
+                // Move starfish forward
+                starfish.position.z -= speed * deltaTime;
+                distance += speed * deltaTime;
                 
-                body.position.copy(originalPos);
-                body.velocity.set(0, 0, 0);
-                body.angularVelocity.set(0, 0, 0);
-                body.quaternion.set(0, 0, 0, 1);
-            });
-            
-            // Clear particles
-            particleSystem.particles.forEach(particle => scene.remove(particle));
-            particleSystem.particles = [];
-        }
-
-        // WebXR setup
-        if ('xr' in navigator) {
-            navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
-                if (supported) {
-                    const vrButton = document.getElementById('vrBtn');
-                    vrButton.style.display = 'block';
-                    vrButton.addEventListener('click', () => {
-                        if (renderer.xr.isPresenting) {
-                            renderer.xr.getSession().end();
-                        } else {
-                            navigator.xr.requestSession('immersive-vr').then((session) => {
-                                renderer.xr.setSession(session);
-                            });
+                // Check for victory
+                if (Math.abs(starfish.position.z) >= FINISH_DISTANCE && !gameWon) {
+                    showVictory();
+                    return;
+                }
+                
+                // Lane switching
+                const targetX = starfishLane * 5;
+                starfish.position.x += (targetX - starfish.position.x) * 0.12;
+                
+                // Jumping
+                if (isJumping) {
+                    starfishY += 10 * deltaTime;
+                    if (starfishY > 7) {
+                        starfishY = 7;
+                        isJumping = false;
+                    }
+                } else {
+                    starfishY += (3 - starfishY) * 0.12;
+                }
+                starfish.position.y = starfishY;
+                
+                // Starfish swimming animation
+                starfish.rotation.y = Math.sin(time * 5) * 0.4;
+                starfish.rotation.x = Math.sin(time * 3) * 0.15;
+                starfishLimbs.forEach((limb, i) => {
+                    limb.rotation.x = Math.sin(time * 6 + i) * 0.5;
+                });
+                
+                // Coin animation
+                objects.forEach(obj => {
+                    if (obj.userData.type === 'coin') {
+                        obj.rotation.y += deltaTime * 3;
+                        obj.position.y = 3 + Math.sin(time * 2 + obj.position.x) * 0.3;
+                    }
+                });
+                
+                // Collision detection
+                objects.forEach(obj => {
+                    const dx = Math.abs(starfish.position.x - obj.position.x);
+                    const dy = Math.abs(starfish.position.y - obj.position.y);
+                    const dz = Math.abs(starfish.position.z - obj.position.z);
+                    
+                    if (dx < 2 && dy < 2 && dz < 3) {
+                        if (obj.userData.type === 'coin' && !obj.userData.collected) {
+                            obj.userData.collected = true;
+                            obj.visible = false;
+                            coins++;
+                            speed += 0.2;
+                            // Coin sound effect
+                            playCoinSound();
+                        } else if (obj.userData.type === 'obstacle' && !obj.userData.destroyed && !gameWon) {
+                            destroyObstacle(obj);
+                            // Crash sound effect
+                            if (globalAudioContext) {
+                                try {
+                                    const osc = globalAudioContext.createOscillator();
+                                    const gain = globalAudioContext.createGain();
+                                    osc.connect(gain);
+                                    gain.connect(globalAudioContext.destination);
+                                    osc.type = 'sawtooth';
+                                    osc.frequency.setValueAtTime(150, globalAudioContext.currentTime);
+                                    osc.frequency.exponentialRampToValueAtTime(50, globalAudioContext.currentTime + 0.3);
+                                    gain.gain.setValueAtTime(0.3, globalAudioContext.currentTime);
+                                    gain.gain.exponentialRampToValueAtTime(0.01, globalAudioContext.currentTime + 0.3);
+                                    osc.start();
+                                    osc.stop(globalAudioContext.currentTime + 0.3);
+                                } catch(e) {}
+                            }
+                            gameOver();
                         }
-                    });
+                    }
+                });
+                
+                // VR camera follows starfish
+                if (renderer.xr.isPresenting) {
+                    camera.position.z = starfish.position.z + 5;
+                    camera.position.x = starfish.position.x * 0.1;
+                } else {
+                    camera.position.z = starfish.position.z + 8;
+                    camera.position.x = starfish.position.x * 0.2;
+                    camera.lookAt(starfish.position.x, starfish.position.y, starfish.position.z);
+                }
+                
+                // Update UI
+                document.getElementById('coins').textContent = coins;
+                document.getElementById('distance').textContent = Math.floor(Math.abs(starfish.position.z));
+                document.getElementById('speed').textContent = speed.toFixed(1);
+            }
+            
+            // Animate debris
+            debris.forEach((piece, index) => {
+                piece.userData.velocity.y -= 0.006;
+                piece.position.add(piece.userData.velocity);
+                piece.rotation.x += 0.02;
+                piece.rotation.z += 0.015;
+                
+                if (piece.position.y < -8) {
+                    scene.remove(piece);
+                    debris.splice(index, 1);
                 }
             });
+            
+            renderer.render(scene, camera);
         }
-
-        // Event listeners
-        document.getElementById('smashBtn').addEventListener('click', triggerSmash);
-        document.getElementById('resetBtn').addEventListener('click', resetScene);
-
-        window.addEventListener('keydown', (event) => {
-            if (event.code === 'Space') {
-                event.preventDefault();
-                triggerSmash();
-            }
-        });
-
+        
+        renderer.setAnimationLoop(animate);
+        
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // Animation loop
-        function animate() {
-            renderer.setAnimationLoop(() => {
-                const deltaTime = clock.getDelta();
-                
-                // Update physics
-                world.step(deltaTime);
-                
-                // Sync Three.js objects with physics bodies
-                building.userData.bodies.forEach((body, index) => {
-                    const block = building.userData.blocks[index];
-                    block.position.copy(body.position);
-                    block.quaternion.copy(body.quaternion);
-                });
-                
-                // Update animations
-                animateStarfish();
-                particleSystem.update(deltaTime);
-                
-                // Update controls
-                controls.update();
-                
-                // Render
-                renderer.render(scene, camera);
-            });
+        
+        // Simple background music
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.3;
+        
+        // Global audio context for sound effects
+        let globalAudioContext = null;
+        
+        // Start music on first user interaction
+        let musicStarted = false;
+        function startMusic() {
+            if (!musicStarted) {
+                bgMusic.play().catch(e => console.log('Music autoplay blocked'));
+                musicStarted = true;
+                // Initialize audio context
+                try {
+                    globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) {}
+            }
         }
-
-        // Start animation
-        animate();
-
-        console.log('🐙 Kev the Annoyer loaded! Press SPACE or click SMASH to destroy the building!');
+        
+        // Coin sound function
+        function playCoinSound() {
+            if (!globalAudioContext) return;
+            try {
+                const osc = globalAudioContext.createOscillator();
+                const gain = globalAudioContext.createGain();
+                osc.connect(gain);
+                gain.connect(globalAudioContext.destination);
+                osc.frequency.setValueAtTime(800, globalAudioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, globalAudioContext.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, globalAudioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioContext.currentTime + 0.1);
+                osc.start();
+                osc.stop(globalAudioContext.currentTime + 0.1);
+            } catch(e) {}
+        }
+        
+        document.addEventListener('click', startMusic);
+        document.addEventListener('keydown', startMusic);
+        
+        console.log('🐠 VR Underwater Starfish Runner ready!');
     </script>
 </body>
 </html>
