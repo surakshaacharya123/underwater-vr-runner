@@ -32,12 +32,83 @@
         <div>⚡ Speed: <span id="speed">15</span> m/s</div>
     </div>
     
-    <div id="instructions">
-        <div>🥽 VR: Use controllers to move lanes & jump</div>
-        <div>💻 Desktop: ← → ↑ keys</div>
-        <div>💰 Collect coins to increase speed</div>
-        <div>🎵 Click anywhere to enable audio</div>
-    </div>
+        <!-- Information Button -->
+        <button id="infoButton" style="
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 150, 255, 0.9);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        " onmouseover="this.style.background='rgba(0, 200, 255, 1)'" onmouseout="this.style.background='rgba(0, 150, 255, 0.9)'">
+            ℹ️ Information
+        </button>
+
+        <!-- Information Modal -->
+        <div id="infoModal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        ">
+            <div style="
+                background: linear-gradient(135deg, #001122, #003366);
+                color: white;
+                padding: 30px;
+                border-radius: 15px;
+                max-width: 500px;
+                margin: 20px;
+                border: 2px solid #00ffff;
+                box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            ">
+                <h2 style="margin: 0 0 20px 0; color: #00ffff; text-align: center;">🌊 Starfish Runner Controls</h2>
+                
+                <h3 style="color: #ffff00; margin: 15px 0 10px 0;">🖥️ Desktop Controls:</h3>
+                <div style="margin-bottom: 8px;">⬅️ <strong>Left Arrow:</strong> Move left</div>
+                <div style="margin-bottom: 8px;">➡️ <strong>Right Arrow:</strong> Move right</div>
+                <div style="margin-bottom: 8px;">⬆️ <strong>Up Arrow:</strong> Jump/swim up</div>
+                <div style="margin-bottom: 8px;">🖱️ <strong>Mouse:</strong> Look around</div>
+                
+                <h3 style="color: #ffff00; margin: 15px 0 10px 0;">🥽 VR Controls:</h3>
+                <div style="margin-bottom: 8px;">🔴 <strong>Left Controller:</strong> Move left/right</div>
+                <div style="margin-bottom: 8px;">🔵 <strong>Right Controller:</strong> Jump/swim up</div>
+                <div style="margin-bottom: 8px;">🎯 <strong>Cursors:</strong> Red/blue laser lines</div>
+                <div style="margin-bottom: 8px;">🟢 <strong>Green cursor:</strong> Targeting object</div>
+                <div style="margin-bottom: 8px;">⚪ <strong>White cursor:</strong> Free space</div>
+                <div style="margin-bottom: 8px;">🎮 <strong>Grip buttons:</strong> Alternative controls</div>
+                
+                <h3 style="color: #ffff00; margin: 15px 0 10px 0;">🎯 Objective:</h3>
+                <div style="margin-bottom: 8px;">🏁 Reach 1000m to win!</div>
+                <div style="margin-bottom: 8px;">🪙 Collect coins for points</div>
+                <div style="margin-bottom: 8px;">🚫 Avoid red obstacles</div>
+                
+                <button onclick="document.getElementById('infoModal').style.display='none'" style="
+                    background: #00ffff;
+                    color: #001122;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 25px;
+                    font-weight: bold;
+                    cursor: pointer;
+                    margin-top: 20px;
+                    width: 100%;
+                    font-size: 16px;
+                ">Close</button>
+            </div>
+        </div>
     
     <div id="controls">
         <button class="btn" id="leftBtn">←</button>
@@ -61,8 +132,8 @@
     <script>
         // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x002244);
-        scene.fog = new THREE.Fog(0x004477, 25, 100);
+        scene.background = new THREE.Color(0x002255);
+        scene.fog = new THREE.Fog(0x003366, 20, 80);
         
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 3, 5);
@@ -73,28 +144,59 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
         
-        // VR Setup
+        // Enhanced VR Setup for Oculus Quest
         document.getElementById('vrButton').addEventListener('click', async () => {
             try {
                 if (renderer.xr.isPresenting) {
                     renderer.xr.getSession().end();
                 } else {
+                    // Check WebXR support first
+                    if (!navigator.xr) {
+                        alert('WebXR not supported. Please use Chrome/Edge on Oculus Quest.');
+                        return;
+                    }
+                    
+                    // Request VR session with optimal settings for Oculus Quest
                     const session = await navigator.xr.requestSession('immersive-vr', {
-                        requiredFeatures: ['local-floor']
+                        requiredFeatures: ['local-floor'],
+                        optionalFeatures: ['hand-tracking', 'bounded-floor']
                     });
+                    
                     renderer.xr.setSession(session);
+                    console.log('✅ VR Session Started Successfully!');
+                    
+                    // Ensure audio starts in VR
+                    startMusic();
                 }
             } catch (err) {
-                console.log('VR not supported:', err);
-                alert('VR not supported on this device');
+                console.error('VR Error:', err);
+                if (err.name === 'NotSupportedError') {
+                    alert('VR not supported. Please use Oculus Quest with Chrome browser.');
+                } else if (err.name === 'NotAllowedError') {
+                    alert('VR permission denied. Please allow VR access and try again.');
+                } else {
+                    alert('VR setup failed. Make sure you\'re using Oculus Quest with updated browser.');
+                }
             }
         });
         
-        // Enhanced underwater lighting system
-        const ambientLight = new THREE.AmbientLight(0x4499dd, 1.2);
+        // Information button functionality
+        document.getElementById('infoButton').addEventListener('click', () => {
+            document.getElementById('infoModal').style.display = 'flex';
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('infoModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('infoModal')) {
+                document.getElementById('infoModal').style.display = 'none';
+            }
+        });
+        
+        // Dynamic underwater lighting system
+        const ambientLight = new THREE.AmbientLight(0x5599bb, 1.0);
         scene.add(ambientLight);
         
-        const sunlight = new THREE.DirectionalLight(0x88ccff, 2.5);
+        const sunlight = new THREE.DirectionalLight(0x66aadd, 2.2);
         sunlight.position.set(0, 40, 20);
         sunlight.castShadow = true;
         sunlight.shadow.mapSize.width = 4096;
@@ -107,57 +209,57 @@
         sunlight.shadow.camera.bottom = -50;
         scene.add(sunlight);
         
-        // Multiple underwater point lights for depth
-        const underwaterLight1 = new THREE.PointLight(0x66aaff, 2.0, 80);
+        // Dynamic underwater point lights
+        const underwaterLight1 = new THREE.PointLight(0x66aaff, 1.8, 80);
         underwaterLight1.position.set(-30, 20, -150);
         scene.add(underwaterLight1);
         
-        const underwaterLight2 = new THREE.PointLight(0x88ddff, 1.8, 70);
+        const underwaterLight2 = new THREE.PointLight(0x77bbff, 1.6, 70);
         underwaterLight2.position.set(30, 18, -300);
         scene.add(underwaterLight2);
         
-        const underwaterLight3 = new THREE.PointLight(0xaaeeff, 1.5, 60);
+        const underwaterLight3 = new THREE.PointLight(0x88ccff, 1.4, 60);
         underwaterLight3.position.set(0, 25, -500);
         scene.add(underwaterLight3);
         
         // Dynamic caustic spotlight
-        const causticLight = new THREE.SpotLight(0xbbffff, 3.0, 120, Math.PI / 4, 0.2);
+        const causticLight = new THREE.SpotLight(0x99ddff, 3.5, 120, Math.PI / 4, 0.2);
         causticLight.position.set(0, 35, 0);
         causticLight.target.position.set(0, 0, -100);
         causticLight.castShadow = true;
         scene.add(causticLight);
         scene.add(causticLight.target);
         
-        // Enhanced volumetric sunlight rays
+        // Dynamic underwater sunlight rays
         const sunRays = [];
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 30; i++) {
             const rayGeometry = new THREE.CylinderGeometry(0.1, 2.5, 60, 12);
             const rayMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0x99ddff, 
+                color: 0x77bbff, 
                 transparent: true, 
                 opacity: 0.15 + Math.random() * 0.1
             });
             const ray = new THREE.Mesh(rayGeometry, rayMaterial);
             ray.position.set(
-                (Math.random() - 0.5) * 100,
+                (Math.random() - 0.5) * 120,
                 30,
                 (Math.random() - 0.5) * 400
             );
             ray.rotation.x = Math.PI;
-            ray.rotation.z = (Math.random() - 0.5) * 0.2;
+            ray.rotation.z = (Math.random() - 0.5) * 0.3;
             sunRays.push(ray);
             scene.add(ray);
         }
         
-        // Enhanced ocean floor with better materials
+        // Darker ocean floor for underwater realism
         const oceanFloor = new THREE.Mesh(
             new THREE.PlaneGeometry(800, 800),
             new THREE.MeshStandardMaterial({ 
-                color: 0xa68b5b,
-                roughness: 0.9,
-                metalness: 0.1,
+                color: 0x4a3c2a,
+                roughness: 0.95,
+                metalness: 0.05,
                 transparent: true,
-                opacity: 0.95
+                opacity: 0.9
             })
         );
         oceanFloor.rotation.x = -Math.PI / 2;
@@ -220,6 +322,124 @@
             );
             seaPlants.push(plant);
             scene.add(plant);
+        }
+        
+        // Functions to create new environment elements
+        function createFish() {
+            const fishColors = [0xFF6347, 0x32CD32, 0x1E90FF, 0xFFD700, 0xFF69B4, 0x00CED1, 0xFF4500, 0x9370DB];
+            const fishBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15 + Math.random() * 0.25, 8, 6),
+                new THREE.MeshStandardMaterial({ 
+                    color: fishColors[Math.floor(Math.random() * fishColors.length)]
+                })
+            );
+            fishBody.scale.z = 2.5;
+            
+            const tail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.1, 0.25, 6),
+                fishBody.material
+            );
+            tail.position.z = -0.3;
+            tail.rotation.x = Math.PI / 2;
+            fishBody.add(tail);
+            
+            fishBody.position.set(
+                (Math.random() - 0.5) * 200,
+                1 + Math.random() * 12,
+                starfish.position.z - 50 - Math.random() * 100
+            );
+            
+            fishBody.userData = {
+                speed: 0.8 + Math.random() * 2,
+                direction: Math.random() * Math.PI * 2,
+                swimHeight: fishBody.position.y
+            };
+            
+            fish.push(fishBody);
+            scene.add(fishBody);
+        }
+        
+        function createCoral() {
+            const coralColors = [0xFF6B6B, 0xFF8E53, 0xFF6B9D, 0xC44569, 0xF8B500, 0x6C5CE7, 0xFF1744, 0x00E676];
+            const coralGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 2, 8, 6);
+            const coral = new THREE.Mesh(
+                coralGeometry,
+                new THREE.MeshStandardMaterial({ 
+                    color: coralColors[Math.floor(Math.random() * coralColors.length)]
+                })
+            );
+            coral.position.set(
+                (Math.random() - 0.5) * 300,
+                0.5 + Math.random() * 3,
+                starfish.position.z - 30 - Math.random() * 80
+            );
+            coral.scale.y = 0.5 + Math.random() * 2;
+            corals.push(coral);
+            scene.add(coral);
+        }
+        
+        function createSeaPlant() {
+            const plant = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.03, 0.15, 1.5 + Math.random() * 5, 8),
+                new THREE.MeshStandardMaterial({ color: 0x228B22 })
+            );
+            plant.position.set(
+                (Math.random() - 0.5) * 350,
+                plant.geometry.parameters.height / 2,
+                starfish.position.z - 20 - Math.random() * 60
+            );
+            seaPlants.push(plant);
+            scene.add(plant);
+        }
+        
+        function createBubble() {
+            const bubble = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05 + Math.random() * 0.2, 12, 8),
+                new THREE.MeshPhysicalMaterial({ 
+                    color: 0xccffff,
+                    transparent: true,
+                    opacity: 0.6,
+                    transmission: 0.9,
+                    roughness: 0.0,
+                    metalness: 0.0,
+                    clearcoat: 1.0,
+                    clearcoatRoughness: 0.0
+                })
+            );
+            bubble.position.set(
+                (Math.random() - 0.5) * 400,
+                Math.random() * 25,
+                starfish.position.z - Math.random() * 100
+            );
+            bubble.userData = {
+                riseSpeed: 0.5 + Math.random() * 1.5,
+                sway: Math.random() * 0.03,
+                originalOpacity: bubble.material.opacity
+            };
+            bubbles.push(bubble);
+            scene.add(bubble);
+        }
+        
+        function spawnEnvironmentElements() {
+            // Continuously spawn fish with higher frequency
+            if (Math.random() < 0.7) {
+                createFish();
+            }
+            
+            // Continuously spawn coral with higher frequency
+            if (Math.random() < 0.5) {
+                createCoral();
+            }
+            
+            // Continuously spawn sea plants with higher frequency
+            if (Math.random() < 0.8) {
+                createSeaPlant();
+            }
+            
+            // Spawn more bubbles continuously
+            if (Math.random() < 0.9) {
+                createBubble();
+            }
         }
         
         // Swimming fish school
@@ -299,37 +519,65 @@
             scene.add(lane);
         }
         
-        // Player starfish (previous simple design)
+        // Enhanced starfish for better VR visibility
         const starfish = new THREE.Group();
         const body = new THREE.Mesh(
-            new THREE.SphereGeometry(0.8, 16, 12),
-            new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+            new THREE.SphereGeometry(1.2, 16, 12),
+            new THREE.MeshStandardMaterial({ 
+                color: 0xFF6B35,
+                emissive: 0x331100,
+                emissiveIntensity: 0.3
+            })
         );
         body.scale.y = 0.4;
+        body.castShadow = true;
+        body.receiveShadow = true;
         starfish.add(body);
         
-        // Starfish limbs
+        // Enhanced starfish limbs for VR visibility
         const starfishLimbs = [];
         for (let i = 0; i < 5; i++) {
             const limb = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.08, 0.15, 1.5, 8),
-                new THREE.MeshStandardMaterial({ color: 0xFF6B35 })
+                new THREE.CylinderGeometry(0.12, 0.2, 2.0, 8),
+                new THREE.MeshStandardMaterial({ 
+                    color: 0xFF6B35,
+                    emissive: 0x331100,
+                    emissiveIntensity: 0.2
+                })
             );
             const angle = (i / 5) * Math.PI * 2;
-            limb.position.set(Math.cos(angle) * 0.7, -0.1, Math.sin(angle) * 0.7);
+            limb.position.set(Math.cos(angle) * 0.9, -0.1, Math.sin(angle) * 0.9);
             limb.rotation.z = Math.PI / 2;
             limb.rotation.y = -angle;
+            limb.castShadow = true;
             starfishLimbs.push(limb);
             starfish.add(limb);
         }
         
-        // Starfish eye
+        // Enhanced starfish eye for VR
         const eye = new THREE.Mesh(
-            new THREE.SphereGeometry(0.15, 12, 8),
-            new THREE.MeshStandardMaterial({ color: 0x000000 })
+            new THREE.SphereGeometry(0.2, 12, 8),
+            new THREE.MeshStandardMaterial({ 
+                color: 0x000000,
+                emissive: 0x000000
+            })
         );
-        eye.position.set(0, 0.3, 0.6);
+        eye.position.set(0, 0.4, 0.8);
+        eye.castShadow = true;
         starfish.add(eye);
+        
+        // Add glowing outline for VR visibility
+        const starfishGlow = new THREE.Mesh(
+            new THREE.SphereGeometry(1.3, 16, 12),
+            new THREE.MeshBasicMaterial({ 
+                color: 0xFFAA55,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.BackSide
+            })
+        );
+        starfishGlow.scale.y = 0.4;
+        starfish.add(starfishGlow);
         
         starfish.position.set(0, 3, 0);
         scene.add(starfish);
@@ -341,33 +589,119 @@
         let isJumping = false;
         let distance = 0;
         let coins = 0;
-        let speed = 18;
+        let speed = 25;
         const FINISH_DISTANCE = 1000;
         let gameWon = false;
         let gameStartTime = Date.now();
         
-        // VR Controllers
+        // VR Controllers with Cursors
         const controller1 = renderer.xr.getController(0);
         const controller2 = renderer.xr.getController(1);
         scene.add(controller1);
         scene.add(controller2);
         
-        // Controller event listeners
+        // Create VR Cursors (Raycasters)
+        const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 }));
+        line.name = 'line';
+        line.scale.z = 10;
+        controller1.add(line.clone());
+        
+        const line2 = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 2 }));
+        line2.name = 'line';
+        line2.scale.z = 10;
+        controller2.add(line2.clone());
+        
+        // VR Cursor Dots
+        const cursorGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+        const cursor1 = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        cursor1.position.z = -10;
+        controller1.add(cursor1);
+        
+        const cursor2 = new THREE.Mesh(cursorGeometry, new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+        cursor2.position.z = -10;
+        controller2.add(cursor2);
+        
+        // Optimized VR Controller event listeners for Oculus Quest
         controller1.addEventListener('selectstart', () => {
-            if (gameRunning && starfishLane > -1) starfishLane--;
+            if (gameRunning && starfishLane > -1) {
+                starfishLane--;
+                console.log('🔴 VR LEFT: Lane', starfishLane);
+                // Haptic feedback
+                if (controller1.gamepad && controller1.gamepad.hapticActuators) {
+                    controller1.gamepad.hapticActuators[0].pulse(0.5, 100);
+                }
+            }
         });
         
         controller2.addEventListener('selectstart', () => {
-            if (gameRunning && starfishLane < 1) starfishLane++;
+            if (gameRunning && starfishLane < 1) {
+                starfishLane++;
+                console.log('🔵 VR RIGHT: Lane', starfishLane);
+                // Haptic feedback
+                if (controller2.gamepad && controller2.gamepad.hapticActuators) {
+                    controller2.gamepad.hapticActuators[0].pulse(0.5, 100);
+                }
+            }
         });
         
         controller1.addEventListener('squeezestart', () => {
-            if (gameRunning && !isJumping) isJumping = true;
+            if (gameRunning && !isJumping) {
+                isJumping = true;
+                console.log('🚀 VR JUMP: Left Controller');
+                if (controller1.gamepad && controller1.gamepad.hapticActuators) {
+                    controller1.gamepad.hapticActuators[0].pulse(0.8, 200);
+                }
+            }
         });
         
         controller2.addEventListener('squeezestart', () => {
-            if (gameRunning && !isJumping) isJumping = true;
+            if (gameRunning && !isJumping) {
+                isJumping = true;
+                console.log('🚀 VR JUMP: Right Controller');
+                if (controller2.gamepad && controller2.gamepad.hapticActuators) {
+                    controller2.gamepad.hapticActuators[0].pulse(0.8, 200);
+                }
+            }
         });
+        
+        // Additional controller button support
+        controller1.addEventListener('selectend', () => {
+            console.log('🔴 VR LEFT: Released');
+        });
+        
+        controller2.addEventListener('selectend', () => {
+            console.log('🔵 VR RIGHT: Released');
+        });
+        
+        // VR Controller Grips with Visual Indicators
+        const controllerGrip1 = renderer.xr.getControllerGrip(0);
+        const leftIndicator = new THREE.Mesh(
+            new THREE.SphereGeometry(0.05),
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        controllerGrip1.add(leftIndicator);
+        scene.add(controllerGrip1);
+        
+        const controllerGrip2 = renderer.xr.getControllerGrip(1);
+        const rightIndicator = new THREE.Mesh(
+            new THREE.SphereGeometry(0.05),
+            new THREE.MeshBasicMaterial({ color: 0x0000ff })
+        );
+        controllerGrip2.add(rightIndicator);
+        scene.add(controllerGrip2);
+        
+        // VR Raycaster for cursor interaction
+        const raycaster = new THREE.Raycaster();
+        const intersected = [];
+        
+        function getIntersections(controller) {
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            return raycaster.intersectObjects([starfish, ...objects], true);
+        }
         
         // Objects and debris
         const objects = [];
@@ -431,6 +765,15 @@
             const gameTime = ((Date.now() - gameStartTime) / 1000).toFixed(1);
             const avgSpeed = (finalDistance / parseFloat(gameTime)).toFixed(1);
             
+            // VR-specific logging
+            if (renderer.xr.isPresenting) {
+                console.log('🥽 VR GAME OVER!');
+                console.log('   Distance:', finalDistance + 'm');
+                console.log('   Coins:', coins);
+                console.log('   Final Speed:', speed.toFixed(1) + 'm/s');
+                console.log('   Score:', totalScore);
+            }
+            
             document.getElementById('finalStats').innerHTML = `
                 <div style="font-size: 18px; margin: 15px 0;">
                     <div>🏃 Distance Covered: <strong>${finalDistance}m</strong></div>
@@ -449,6 +792,23 @@
         function showVictory() {
             gameRunning = false;
             gameWon = true;
+            
+            // VR-specific victory logging
+            if (renderer.xr.isPresenting) {
+                console.log('🥽 VR VICTORY! 🏆');
+                console.log('   🏁 Completed 1000m in VR!');
+                console.log('   💰 Coins collected:', coins);
+                console.log('   ⚡ Final speed:', speed.toFixed(1) + 'm/s');
+                
+                // Extra VR haptic celebration
+                if (controller1.gamepad && controller1.gamepad.hapticActuators) {
+                    controller1.gamepad.hapticActuators[0].pulse(1.0, 500);
+                }
+                if (controller2.gamepad && controller2.gamepad.hapticActuators) {
+                    controller2.gamepad.hapticActuators[0].pulse(1.0, 500);
+                }
+            }
+            
             // Victory sound effect
             if (globalAudioContext) {
                 try {
@@ -522,23 +882,35 @@
         
         createFinishLine();
         
-        // Generate enhanced level with more coins
-        for (let z = -25; z > -FINISH_DISTANCE - 100; z -= 8) {
-            for (let lane = -1; lane <= 1; lane++) {
-                if (Math.random() < 0.7) {
-                    createCoin(lane * 5, z);
-                }
+        // Generate progressive difficulty level
+        for (let z = -25; z > -FINISH_DISTANCE - 100; z -= 12) {
+            const progressFactor = Math.abs(z) / FINISH_DISTANCE; // 0 to 1 as we progress
+            
+            // More coins with better distribution
+            if (Math.random() < 0.85) {
+                const coinLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                createCoin(coinLane * 5, z);
             }
-            // Add coin clusters occasionally
-            if (Math.random() < 0.3) {
+            
+            // Add coin clusters more frequently
+            if (Math.random() < 0.25) {
                 const clusterLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
-                for (let i = 0; i < 3; i++) {
-                    createCoin(clusterLane * 5, z - i * 2);
+                for (let i = 0; i < 2; i++) {
+                    createCoin(clusterLane * 5, z - i * 3);
                 }
             }
-            if (Math.random() < 0.18 && z > -FINISH_DISTANCE + 50) {
+            
+            // Progressive obstacle difficulty
+            const baseObstacleChance = 0.08 + (progressFactor * 0.1); // Increases from 8% to 18%
+            if (Math.random() < baseObstacleChance && z > -FINISH_DISTANCE + 50 && z % 25 === 0) {
                 const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
                 createObstacle(obsLane * 5, z);
+                
+                // Add challenging obstacle patterns in later sections
+                if (progressFactor > 0.6 && Math.random() < 0.4) {
+                    const secondLane = [-1, 0, 1].filter(lane => lane !== obsLane / 5)[Math.floor(Math.random() * 2)];
+                    createObstacle(secondLane * 5, z - 8);
+                }
             }
         }
         
@@ -579,63 +951,101 @@
             
             // Enhanced underwater environment animation
             sunRays.forEach((ray, index) => {
-                ray.material.opacity = 0.12 + Math.sin(time * 0.8 + index) * 0.06;
-                ray.rotation.z = Math.sin(time * 0.4 + index) * 0.1;
-                ray.position.x += Math.sin(time * 0.2 + index) * 0.5;
+                // Enhanced sun ray visibility in VR for beautiful underwater effect
+                const baseOpacity = renderer.xr.isPresenting ? 0.18 : 0.12;
+                const variation = renderer.xr.isPresenting ? 0.12 : 0.08;
+                ray.material.opacity = baseOpacity + Math.sin(time * 1.2 + index) * variation;
+                ray.rotation.z = Math.sin(time * 0.6 + index) * 0.2;
+                ray.position.x += Math.sin(time * 0.4 + index) * 0.8;
+                ray.position.y = 30 + Math.sin(time * 0.5 + index) * 5;
             });
             
-            // Animate caustic lighting for realistic underwater effect
-            causticLight.intensity = 2.5 + Math.sin(time * 3) * 1.0;
-            causticLight.position.x = Math.sin(time * 0.5) * 15;
-            causticLight.position.z = starfish.position.z + Math.cos(time * 0.6) * 20;
+            // Update VR cursor interactions
+            if (renderer.xr.isPresenting) {
+                // Check controller 1 intersections
+                const intersections1 = getIntersections(controller1);
+                if (intersections1.length > 0) {
+                    const line1 = controller1.getObjectByName('line');
+                    if (line1) line1.material.color.setHex(0x00ff00); // Green when pointing at objects
+                } else {
+                    const line1 = controller1.getObjectByName('line');
+                    if (line1) line1.material.color.setHex(0xff0000); // Red when not pointing
+                }
+                
+                // Check controller 2 intersections
+                const intersections2 = getIntersections(controller2);
+                if (intersections2.length > 0) {
+                    const line2 = controller2.getObjectByName('line');
+                    if (line2) line2.material.color.setHex(0x00ff00); // Green when pointing at objects
+                } else {
+                    const line2 = controller2.getObjectByName('line');
+                    if (line2) line2.material.color.setHex(0x0000ff); // Blue when not pointing
+                }
+            }
+            
+            // Animate caustic lighting with VR-aware intensity
+            const baseIntensity = renderer.xr.isPresenting ? 1.5 : 3.0;
+            const variation = renderer.xr.isPresenting ? 0.5 : 1.0;
+            causticLight.intensity = baseIntensity + Math.sin(time * 4) * variation;
+            causticLight.position.x = Math.sin(time * 0.8) * 20;
+            causticLight.position.z = starfish.position.z + Math.cos(time * 1.0) * 25;
             causticLight.target.position.x = starfish.position.x;
             causticLight.target.position.z = starfish.position.z - 50;
             
-            // Animate underwater point lights
-            underwaterLight1.intensity = 1.8 + Math.sin(time * 1.5) * 0.4;
-            underwaterLight2.intensity = 1.6 + Math.cos(time * 1.2) * 0.3;
-            underwaterLight3.intensity = 1.3 + Math.sin(time * 0.8) * 0.2;
+            // Animate underwater point lights with VR-aware intensity
+            const vrMultiplier = renderer.xr.isPresenting ? 0.6 : 1.0;
+            underwaterLight1.intensity = (1.5 + Math.sin(time * 2.0) * 0.8) * vrMultiplier;
+            underwaterLight2.intensity = (1.3 + Math.cos(time * 1.8) * 0.7) * vrMultiplier;
+            underwaterLight3.intensity = (1.1 + Math.sin(time * 1.5) * 0.6) * vrMultiplier;
             
             bubbles.forEach(bubble => {
-                bubble.position.y += bubble.userData.riseSpeed * deltaTime;
-                bubble.position.x += Math.sin(time + bubble.position.z * 0.01) * bubble.userData.sway;
-                bubble.material.opacity = bubble.userData.originalOpacity * (0.8 + Math.sin(time * 4 + bubble.position.x) * 0.2);
-                bubble.rotation.x += deltaTime * 0.5;
-                bubble.rotation.y += deltaTime * 0.3;
-                if (bubble.position.y > 30) {
-                    bubble.position.y = -2;
-                    bubble.position.z = starfish.position.z + (Math.random() - 0.5) * 400;
+                bubble.position.y += bubble.userData.riseSpeed * deltaTime * 2;
+                bubble.position.x += Math.sin(time * 2 + bubble.position.z * 0.02) * bubble.userData.sway * 3;
+                bubble.material.opacity = bubble.userData.originalOpacity * (0.6 + Math.sin(time * 6 + bubble.position.x) * 0.4);
+                bubble.rotation.x += deltaTime * 1.5;
+                bubble.rotation.y += deltaTime * 1.0;
+                bubble.scale.setScalar(1 + Math.sin(time * 3 + bubble.position.x) * 0.3);
+                if (bubble.position.y > 35) {
+                    bubble.position.y = -5;
+                    bubble.position.z = starfish.position.z + (Math.random() - 0.5) * 200;
+                    bubble.position.x = (Math.random() - 0.5) * 100;
+                    playBubbleSound();
                 }
             });
             
             fish.forEach(fishBody => {
-                fishBody.userData.direction += (Math.random() - 0.5) * 0.015;
-                fishBody.position.x += Math.cos(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
-                fishBody.position.z += Math.sin(fishBody.userData.direction) * fishBody.userData.speed * deltaTime;
-                fishBody.position.y = fishBody.userData.swimHeight + Math.sin(time * 3 + fishBody.position.x * 0.1) * 0.5;
+                fishBody.userData.direction += (Math.random() - 0.5) * 0.03;
+                fishBody.position.x += Math.cos(fishBody.userData.direction) * fishBody.userData.speed * deltaTime * 2;
+                fishBody.position.z += Math.sin(fishBody.userData.direction) * fishBody.userData.speed * deltaTime * 2;
+                fishBody.position.y = fishBody.userData.swimHeight + Math.sin(time * 5 + fishBody.position.x * 0.2) * 1.5;
                 fishBody.rotation.y = fishBody.userData.direction;
+                fishBody.rotation.x = Math.sin(time * 4 + fishBody.position.z * 0.1) * 0.3;
+                fishBody.scale.setScalar(1 + Math.sin(time * 6 + fishBody.position.x) * 0.2);
             });
             
             seaPlants.forEach((plant, index) => {
-                plant.rotation.z = Math.sin(time * 0.8 + index * 0.3) * 0.15;
+                plant.rotation.z = Math.sin(time * 1.5 + index * 0.5) * 0.4;
+                plant.rotation.x = Math.cos(time * 1.2 + index * 0.3) * 0.2;
+                plant.scale.y = 1 + Math.sin(time * 2 + index) * 0.3;
             });
             
             if (gameRunning) {
-                // Move starfish forward
+                // Move starfish forward (IDENTICAL IN VR AND DESKTOP)
                 starfish.position.z -= speed * deltaTime;
                 distance += speed * deltaTime;
                 
-                // Check for victory
+                // Check for victory (WORKS IN BOTH VR AND DESKTOP)
                 if (Math.abs(starfish.position.z) >= FINISH_DISTANCE && !gameWon) {
                     showVictory();
                     return;
                 }
                 
-                // Lane switching
+                // Lane switching (SAME SPEED IN VR AND DESKTOP)
                 const targetX = starfishLane * 5;
-                starfish.position.x += (targetX - starfish.position.x) * 0.12;
+                const lerpSpeed = 0.12; // Same speed for both VR and desktop
+                starfish.position.x += (targetX - starfish.position.x) * lerpSpeed;
                 
-                // Jumping
+                // Jumping (IDENTICAL MECHANICS)
                 if (isJumping) {
                     starfishY += 10 * deltaTime;
                     if (starfishY > 7) {
@@ -662,7 +1072,37 @@
                     }
                 });
                 
-                // Collision detection
+                // Dynamic obstacle spawning based on speed/coins collected
+                const speedFactor = Math.min(speed / 25, 2.0); // Max 2x difficulty
+                const coinFactor = Math.min(coins / 20, 1.5); // Coins also increase difficulty
+                const difficultyMultiplier = 1 + (speedFactor * 0.5) + (coinFactor * 0.3);
+                
+                // Obstacles spawn more frequently as speed increases
+                const obstacleChance = 0.008 * difficultyMultiplier;
+                if (distance > 10 && Math.random() < obstacleChance) {
+                    const obsLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                    createObstacle(obsLane * 5, starfish.position.z - 80);
+                    
+                    // Chance for double obstacles at high speed
+                    if (speed > 35 && Math.random() < 0.3) {
+                        const secondLane = [-1, 0, 1].filter(lane => lane !== obsLane / 5)[Math.floor(Math.random() * 2)];
+                        createObstacle(secondLane * 5, starfish.position.z - 85);
+                    }
+                }
+                
+                // More coins spawn as difficulty increases
+                const coinChance = 0.025 + (speedFactor * 0.01);
+                if (Math.random() < coinChance) {
+                    const coinLane = [-1, 0, 1][Math.floor(Math.random() * 3)];
+                    createCoin(coinLane * 5, starfish.position.z - 40);
+                }
+                
+                // Continuously spawn environment elements more frequently
+                if (Math.random() < 0.08) {
+                    spawnEnvironmentElements();
+                }
+                
+                // Collision detection (WORKS IDENTICALLY IN VR AND DESKTOP)
                 objects.forEach(obj => {
                     const dx = Math.abs(starfish.position.x - obj.position.x);
                     const dy = Math.abs(starfish.position.y - obj.position.y);
@@ -673,11 +1113,35 @@
                             obj.userData.collected = true;
                             obj.visible = false;
                             coins++;
-                            speed += 0.2;
+                            speed += 0.2; // Speed increases with coins in both VR and desktop
+                            
+                            // VR haptic feedback for coin collection
+                            if (renderer.xr.isPresenting) {
+                                if (controller1.gamepad && controller1.gamepad.hapticActuators) {
+                                    controller1.gamepad.hapticActuators[0].pulse(0.3, 50);
+                                }
+                                if (controller2.gamepad && controller2.gamepad.hapticActuators) {
+                                    controller2.gamepad.hapticActuators[0].pulse(0.3, 50);
+                                }
+                                console.log('🪙 VR Coin collected! Speed:', speed.toFixed(1));
+                            }
+                            
                             // Coin sound effect
                             playCoinSound();
                         } else if (obj.userData.type === 'obstacle' && !obj.userData.destroyed && !gameWon) {
                             destroyObstacle(obj);
+                            
+                            // VR haptic feedback for collision
+                            if (renderer.xr.isPresenting) {
+                                if (controller1.gamepad && controller1.gamepad.hapticActuators) {
+                                    controller1.gamepad.hapticActuators[0].pulse(1.0, 300);
+                                }
+                                if (controller2.gamepad && controller2.gamepad.hapticActuators) {
+                                    controller2.gamepad.hapticActuators[0].pulse(1.0, 300);
+                                }
+                                console.log('💥 VR Collision! Game Over.');
+                            }
+                            
                             // Crash sound effect
                             if (globalAudioContext) {
                                 try {
@@ -699,20 +1163,46 @@
                     }
                 });
                 
-                // VR camera follows starfish
+                // Optimized camera system for VR and desktop
                 if (renderer.xr.isPresenting) {
-                    camera.position.z = starfish.position.z + 5;
-                    camera.position.x = starfish.position.x * 0.1;
+                    // VR mode: Smooth camera following for comfortable experience
+                    const targetX = starfish.position.x;
+                    const targetY = starfish.position.y + 3;
+                    const targetZ = starfish.position.z + 8;
+                    
+                    camera.position.x += (targetX - camera.position.x) * 0.1;
+                    camera.position.y += (targetY - camera.position.y) * 0.1;
+                    camera.position.z += (targetZ - camera.position.z) * 0.1;
+                    
+                    // Ensure starfish is always visible in VR
+                    const lookTarget = new THREE.Vector3(
+                        starfish.position.x,
+                        starfish.position.y,
+                        starfish.position.z - 5
+                    );
+                    camera.lookAt(lookTarget);
                 } else {
+                    // Desktop mode: Standard third-person camera
                     camera.position.z = starfish.position.z + 8;
                     camera.position.x = starfish.position.x * 0.2;
                     camera.lookAt(starfish.position.x, starfish.position.y, starfish.position.z);
                 }
                 
-                // Update UI
+                // Update UI (WORKS IN BOTH VR AND DESKTOP)
                 document.getElementById('coins').textContent = coins;
                 document.getElementById('distance').textContent = Math.floor(Math.abs(starfish.position.z));
                 document.getElementById('speed').textContent = speed.toFixed(1);
+                
+                // VR Debug Info (only in console)
+                if (renderer.xr.isPresenting && Math.floor(time) % 5 === 0 && Math.floor(time * 10) % 10 === 0) {
+                    console.log('🥽 VR Game Status:', {
+                        coins: coins,
+                        distance: Math.floor(Math.abs(starfish.position.z)),
+                        speed: speed.toFixed(1),
+                        lane: starfishLane,
+                        gameRunning: gameRunning
+                    });
+                }
             }
             
             // Animate debris
@@ -739,47 +1229,342 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // Simple background music
-        const bgMusic = document.getElementById('bgMusic');
-        bgMusic.volume = 0.3;
-        
-        // Global audio context for sound effects
+        // Smooth procedural background music system
         let globalAudioContext = null;
-        
-        // Start music on first user interaction
+        let musicNodes = {};
         let musicStarted = false;
+        let musicLoop = null;
+        
+        // Start smooth background music
         function startMusic() {
             if (!musicStarted) {
-                bgMusic.play().catch(e => console.log('Music autoplay blocked'));
                 musicStarted = true;
-                // Initialize audio context
                 try {
                     globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create smooth reverb
+                    const convolver = globalAudioContext.createConvolver();
+                    const impulseLength = globalAudioContext.sampleRate * 3;
+                    const impulse = globalAudioContext.createBuffer(2, impulseLength, globalAudioContext.sampleRate);
+                    
+                    for (let channel = 0; channel < 2; channel++) {
+                        const channelData = impulse.getChannelData(channel);
+                        for (let i = 0; i < impulseLength; i++) {
+                            channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 3);
+                        }
+                    }
+                    convolver.buffer = impulse;
+                    musicNodes.reverb = convolver;
+                    
+                    startSmoothMusic();
                 } catch(e) {}
             }
         }
         
-        // Coin sound function
+        // Smooth underwater adventure music
+        function startSmoothMusic() {
+            if (!globalAudioContext) return;
+            
+            const createSmoothOscillator = (freq, type = 'sine', volume = 0.1, duration = 8) => {
+                const osc = globalAudioContext.createOscillator();
+                const gain = globalAudioContext.createGain();
+                const filter = globalAudioContext.createBiquadFilter();
+                
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, globalAudioContext.currentTime);
+                
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1500, globalAudioContext.currentTime);
+                filter.Q.setValueAtTime(1, globalAudioContext.currentTime);
+                
+                osc.connect(filter);
+                filter.connect(gain);
+                
+                if (musicNodes.reverb) {
+                    gain.connect(musicNodes.reverb);
+                    musicNodes.reverb.connect(globalAudioContext.destination);
+                } else {
+                    gain.connect(globalAudioContext.destination);
+                }
+                
+                gain.gain.setValueAtTime(0, globalAudioContext.currentTime);
+                gain.gain.linearRampToValueAtTime(volume, globalAudioContext.currentTime + 1);
+                gain.gain.linearRampToValueAtTime(volume * 0.8, globalAudioContext.currentTime + duration - 1);
+                gain.gain.linearRampToValueAtTime(0, globalAudioContext.currentTime + duration);
+                
+                osc.start();
+                osc.stop(globalAudioContext.currentTime + duration);
+                
+                return { osc, gain, filter };
+            };
+            
+            const playMusicLayer = () => {
+                if (!globalAudioContext) return;
+                
+                // Smooth ambient pad (C major chord)
+                createSmoothOscillator(130.81, 'sine', 0.08, 8); // C2
+                createSmoothOscillator(164.81, 'sine', 0.06, 8); // E2
+                createSmoothOscillator(196.00, 'sine', 0.06, 8); // G2
+                createSmoothOscillator(261.63, 'triangle', 0.04, 8); // C3
+                
+                // Flowing melody
+                setTimeout(() => {
+                    const melodyNotes = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25];
+                    const melody = [0, 2, 4, 5, 7, 5, 4, 2, 0];
+                    
+                    melody.forEach((noteIndex, i) => {
+                        setTimeout(() => {
+                            createSmoothOscillator(melodyNotes[noteIndex], 'sine', 0.12, 1.5);
+                        }, i * 800);
+                    });
+                }, 1000);
+                
+                // Harmonic layer
+                setTimeout(() => {
+                    createSmoothOscillator(146.83, 'triangle', 0.05, 6); // D2
+                    createSmoothOscillator(220.00, 'triangle', 0.04, 6); // A2
+                    createSmoothOscillator(293.66, 'triangle', 0.03, 6); // D3
+                }, 2000);
+            };
+            
+            // Start music and loop every 8 seconds
+            playMusicLayer();
+            musicLoop = setInterval(playMusicLayer, 8000);
+        }
+        
+        // Enhanced coin collection sound effect
         function playCoinSound() {
             if (!globalAudioContext) return;
             try {
-                const osc = globalAudioContext.createOscillator();
+                // Bright, satisfying coin chime with multiple layers
+                const osc1 = globalAudioContext.createOscillator();
+                const osc2 = globalAudioContext.createOscillator();
+                const osc3 = globalAudioContext.createOscillator();
                 const gain = globalAudioContext.createGain();
-                osc.connect(gain);
-                gain.connect(globalAudioContext.destination);
-                osc.frequency.setValueAtTime(800, globalAudioContext.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(1200, globalAudioContext.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.2, globalAudioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, globalAudioContext.currentTime + 0.1);
-                osc.start();
-                osc.stop(globalAudioContext.currentTime + 0.1);
+                const filter = globalAudioContext.createBiquadFilter();
+                const compressor = globalAudioContext.createDynamicsCompressor();
+                
+                // Triple harmonic coin sound for maximum satisfaction
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(1047, globalAudioContext.currentTime); // C6
+                osc1.frequency.exponentialRampToValueAtTime(2093, globalAudioContext.currentTime + 0.2); // C7
+                
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(1319, globalAudioContext.currentTime); // E6
+                osc2.frequency.exponentialRampToValueAtTime(2637, globalAudioContext.currentTime + 0.2); // E7
+                
+                osc3.type = 'sine';
+                osc3.frequency.setValueAtTime(1568, globalAudioContext.currentTime); // G6
+                osc3.frequency.exponentialRampToValueAtTime(3136, globalAudioContext.currentTime + 0.2); // G7
+                
+                // Bright filter for sparkly sound
+                filter.type = 'highpass';
+                filter.frequency.setValueAtTime(200, globalAudioContext.currentTime);
+                filter.Q.setValueAtTime(2, globalAudioContext.currentTime);
+                
+                // Compression for punch
+                compressor.threshold.setValueAtTime(-24, globalAudioContext.currentTime);
+                compressor.knee.setValueAtTime(30, globalAudioContext.currentTime);
+                compressor.ratio.setValueAtTime(12, globalAudioContext.currentTime);
+                compressor.attack.setValueAtTime(0.003, globalAudioContext.currentTime);
+                compressor.release.setValueAtTime(0.25, globalAudioContext.currentTime);
+                
+                // Connect audio chain
+                osc1.connect(gain);
+                osc2.connect(gain);
+                osc3.connect(gain);
+                gain.connect(filter);
+                filter.connect(compressor);
+                compressor.connect(globalAudioContext.destination);
+                
+                // Punchy envelope for satisfying pop
+                gain.gain.setValueAtTime(0, globalAudioContext.currentTime);
+                gain.gain.linearRampToValueAtTime(0.6, globalAudioContext.currentTime + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.3, globalAudioContext.currentTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, globalAudioContext.currentTime + 0.25);
+                
+                osc1.start();
+                osc2.start();
+                osc3.start();
+                osc1.stop(globalAudioContext.currentTime + 0.25);
+                osc2.stop(globalAudioContext.currentTime + 0.25);
+                osc3.stop(globalAudioContext.currentTime + 0.25);
+                
+                // Visual feedback - briefly dim background music
+                if (bgMusic) {
+                    const originalVolume = bgMusic.volume;
+                    bgMusic.volume = originalVolume * 0.3;
+                    setTimeout(() => {
+                        bgMusic.volume = originalVolume;
+                    }, 200);
+                }
             } catch(e) {}
         }
+        
+        // Subtle bubble sound effect
+        function playBubbleSound() {
+            if (!globalAudioContext || Math.random() > 0.05) return;
+            try {
+                const osc = globalAudioContext.createOscillator();
+                const gain = globalAudioContext.createGain();
+                
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200 + Math.random() * 200, globalAudioContext.currentTime);
+                
+                osc.connect(gain);
+                gain.connect(globalAudioContext.destination);
+                
+                gain.gain.setValueAtTime(0.02, globalAudioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, globalAudioContext.currentTime + 0.2);
+                
+                osc.start();
+                osc.stop(globalAudioContext.currentTime + 0.2);
+            } catch(e) {}
+        }
+        
+
         
         document.addEventListener('click', startMusic);
         document.addEventListener('keydown', startMusic);
         
+        // VR Instructions Display
+        if (renderer.xr.isPresenting) {
+            console.log('🥽 VR MODE ACTIVE!');
+            console.log('🎮 Oculus Quest Controls:');
+            console.log('   Left Trigger = Move Left Lane');
+            console.log('   Right Trigger = Move Right Lane');
+            console.log('   Both Grips = Jump');
+        }
+        
         console.log('🐠 VR Underwater Starfish Runner ready!');
+        console.log('📱 PRESENTATION READY:');
+        console.log('   ✅ Desktop controls: Arrow keys');
+        console.log('   ✅ VR support: Oculus Quest optimized');
+        console.log('   ✅ Audio system: Enhanced coin sounds');
+        console.log('   ✅ Environment: Dynamic underwater scene');
+        console.log('   ✅ Game mechanics: 1000m finish line');
+        console.log('🚀 Ready for demonstration!');
+        
+        // Keep VR button as "Enter VR" always - let the click handler deal with compatibility
+        document.getElementById('vrButton').textContent = 'Enter VR';
+        document.getElementById('vrButton').style.background = '#4CAF50';
+        
+        // Check WebXR support silently for logging only
+        if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+                if (supported) {
+                    console.log('✅ WebXR VR supported - Oculus Quest ready!');
+                } else {
+                    console.log('⚠️ WebXR VR not supported on this device (but button remains active)');
+                }
+            }).catch(() => {
+                console.log('⚠️ WebXR check failed (but button remains active)');
+            });
+        } else {
+            console.log('❌ WebXR not available on this browser (but button remains active)');
+        }
+        
+        // Enhanced VR session handlers with realistic underwater lighting
+        renderer.xr.addEventListener('sessionstart', () => {
+            console.log('🥽 VR SESSION ACTIVE!');
+            console.log('🎮 OCULUS QUEST CONTROLS:');
+            console.log('   🔴 Left Trigger = Move LEFT');
+            console.log('   🔵 Right Trigger = Move RIGHT');
+            console.log('   🤏 Both Grips = JUMP');
+            console.log('   👀 Look around naturally!');
+            
+            // Optimize rendering for VR
+            renderer.setPixelRatio(1);
+            renderer.shadowMap.enabled = true;
+            
+            // ENSURE GAME STATE CONTINUES IN VR
+            gameRunning = true; // Make sure game doesn't pause
+            
+            // Maintain all game mechanics in VR
+            console.log('🎮 VR Game State:');
+            console.log('   Coins:', coins);
+            console.log('   Distance:', Math.floor(Math.abs(starfish.position.z)), 'm');
+            console.log('   Speed:', speed.toFixed(1), 'm/s');
+            console.log('   Lane:', starfishLane);
+            
+            // VR-specific realistic underwater lighting
+            ambientLight.intensity = 0.6; // Reduced for realistic depth
+            sunlight.intensity = 1.0; // Dimmed sunlight for underwater feel
+            
+            // Enhance underwater point lights for VR atmosphere
+            underwaterLight1.intensity = 0.8;
+            underwaterLight2.intensity = 0.7;
+            underwaterLight3.intensity = 0.6;
+            
+            // Reduce caustic light for more realistic underwater scene
+            causticLight.intensity = 1.8;
+            
+            // Enhance coral visibility with subtle glow
+            corals.forEach(coral => {
+                coral.material.emissive = new THREE.Color(coral.material.color).multiplyScalar(0.1);
+            });
+            
+            // Make sun rays more visible and atmospheric
+            sunRays.forEach(ray => {
+                ray.material.opacity *= 1.3;
+            });
+            
+            // Ensure starfish is visible with slight glow
+            starfish.visible = true;
+            starfish.children[0].material.emissive = new THREE.Color(0x331100);
+            starfish.children[0].material.emissiveIntensity = 0.2;
+            
+            // Start audio if not already started
+            startMusic();
+            
+            console.log('🌊 VR Underwater lighting optimized for realistic experience!');
+            console.log('✅ All game mechanics active in VR mode!');
+        });
+        
+        renderer.xr.addEventListener('sessionend', () => {
+            console.log('🖥️ VR SESSION ENDED - Desktop Mode');
+            
+            // Restore desktop settings
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            // MAINTAIN GAME STATE WHEN EXITING VR
+            console.log('🎮 Game continues in Desktop Mode:');
+            console.log('   Coins:', coins);
+            console.log('   Distance:', Math.floor(Math.abs(starfish.position.z)), 'm');
+            console.log('   Speed:', speed.toFixed(1), 'm/s');
+            console.log('   Lane:', starfishLane);
+            
+            // Restore desktop lighting levels
+            ambientLight.intensity = 1.0;
+            sunlight.intensity = 2.2;
+            underwaterLight1.intensity = 1.8;
+            underwaterLight2.intensity = 1.6;
+            underwaterLight3.intensity = 1.4;
+            causticLight.intensity = 3.5;
+            
+            // Remove coral glow for desktop
+            corals.forEach(coral => {
+                coral.material.emissive = new THREE.Color(0x000000);
+            });
+            
+            // Restore sun rays opacity
+            sunRays.forEach(ray => {
+                ray.material.opacity /= 1.3;
+            });
+            
+            // Remove starfish glow for desktop
+            starfish.children[0].material.emissive = new THREE.Color(0x331100);
+            starfish.children[0].material.emissiveIntensity = 0.3;
+            
+            console.log('💻 Desktop lighting restored!');
+            console.log('✅ Game state preserved across VR/Desktop modes!');
+        });
+        
+        // VR-specific optimizations
+        if (renderer.xr.isPresenting) {
+            // Reduce some effects for better VR performance
+            renderer.shadowMap.type = THREE.PCFShadowMap;
+        }
     </script>
 </body>
 </html>
